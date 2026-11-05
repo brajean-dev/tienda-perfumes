@@ -129,6 +129,25 @@ describe('GET /brands/:brandSlug y sus perfumes', () => {
     expect(blank.json().items).toHaveLength(firstBrand.perfumes.length);
   });
 
+  it('un carácter de control en q (el byte NUL que PostgreSQL no admite) da 400, no un 500 de la base', async () => {
+    const base = `/brands/${firstBrand.slug}/perfumes`;
+
+    const nul = await app.inject({ method: 'GET', url: `${base}?q=%00` });
+    const inside = await app.inject({ method: 'GET', url: `${base}?q=per%00fume` });
+
+    expect(nul.statusCode).toBe(400);
+    expectMatchesContract('listBrandPerfumes', 400, nul.json());
+    expect(inside.statusCode).toBe(400);
+  });
+
+  it('un q con espacios alrededor busca igual que sin ellos', async () => {
+    const base = `/brands/${firstBrand.slug}/perfumes`;
+
+    const response = await app.inject({ method: 'GET', url: `${base}?q=%20%20perfume%201%20%20` });
+
+    expect(response.json().items.map((p: { slug: string }) => p.slug)).toEqual([firstPerfume.slug]);
+  });
+
   it('responde 404 para una marca o un perfume que no existen, con la forma del contrato', async () => {
     const missingBrand = await app.inject({ method: 'GET', url: '/brands/no-existe' });
     const missingPerfume = await app.inject({

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import { buildApp } from '../app.ts';
 import {
   createFailingCatalogRepository,
@@ -137,6 +138,61 @@ describe('GET /brands/:brandSlug/perfumes', () => {
     expect(response.json().error.message).toContain('q');
   });
 
+  it('el máximo de q se mide sobre lo enviado: "a" más 150 espacios es demasiado largo', async () => {
+    const response = await (
+      await appWithFakeData()
+    ).inject({
+      method: 'GET',
+      url: `/brands/marca-alfa/perfumes?q=a${'%20'.repeat(150)}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it.each(['%00', 'a%00b', '%01', '%1F', '%7F'])(
+    'responde 400 (no 500) si q lleva un carácter de control (%s)',
+    async (encoded) => {
+      const response = await (
+        await appWithFakeData()
+      ).inject({
+        method: 'GET',
+        url: `/brands/marca-alfa/perfumes?q=${encoded}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.message).toContain('caracteres de control');
+    },
+  );
+
+  it.each(['%09', '%0A'])('admite el tabulador y el salto de línea en q (%s)', async (encoded) => {
+    const response = await (
+      await appWithFakeData()
+    ).inject({
+      method: 'GET',
+      url: `/brands/marca-alfa/perfumes?q=noche${encoded}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items.map((p: { slug: string }) => p.slug)).toEqual(['noche-azul']);
+  });
+
+  it('ignora los espacios alrededor de q y trata un q en blanco como sin búsqueda', async () => {
+    const instance = await appWithFakeData();
+
+    const padded = await instance.inject({
+      method: 'GET',
+      url: '/brands/marca-alfa/perfumes?q=%20%20noche%20%20',
+    });
+    const blank = await instance.inject({
+      method: 'GET',
+      url: '/brands/marca-alfa/perfumes?q=%20%20',
+    });
+
+    expect(padded.json().items.map((p: { slug: string }) => p.slug)).toEqual(['noche-azul']);
+    expect(blank.json().items).toHaveLength(2);
+  });
+
   it('responde 400 si q se repite (?q=a&q=b)', async () => {
     const response = await (
       await appWithFakeData()
@@ -219,6 +275,32 @@ describe('errores que Fastify resuelve antes de llegar a las rutas', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('el 400 lleva la cabecera de CORS si la petición viene del origen de la web (y solo de él)', async () => {
+    const instance = await appWithFakeData();
+
+    const allowed = await instance.inject({
+      method: 'GET',
+      url: '/brands/%E0%A4%A',
+      headers: { origin: WEB_ORIGIN },
+    });
+    const denied = await instance.inject({
+      method: 'GET',
+      url: '/brands/%E0%A4%A',
+      headers: { origin: 'https://sitio-ajeno.example' },
+    });
+    const tooLong = await instance.inject({
+      method: 'GET',
+      url: `/brands/${'a'.repeat(301)}`,
+      headers: { origin: WEB_ORIGIN },
+    });
+
+    expect(allowed.statusCode).toBe(400);
+    expect(allowed.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
+    expect(tooLong.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
+    expect(denied.statusCode).toBe(400);
+    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+  });
 });
 
 describe('errores generales', () => {
@@ -250,6 +332,20 @@ describe('errores generales', () => {
       error: { code: 'INTERNAL_ERROR', message: 'Error interno del servidor.' },
     });
     expect(response.body).not.toContain('secreta');
+  });
+
+  it('un ZodError que sale de dentro (no de validar la entrada) es un fallo interno: 500, no 400', async () => {
+    // Simula que alguien usa Zod para validar datos de la base y falla: no es culpa del cliente.
+    const failing = createFakeCatalogRepository();
+    failing.listBrands = async () => {
+      throw new ZodError([]);
+    };
+    app = await buildApp({ WEB_ORIGIN }, { catalog: failing });
+
+    const response = await app.inject({ method: 'GET', url: '/brands' });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json().error.code).toBe('INTERNAL_ERROR');
   });
 
   it('los endpoints del catálogo conservan CORS restringido al origen de la web', async () => {

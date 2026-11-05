@@ -18,18 +18,20 @@ try {
   const fresh = readFileSync(freshPath, 'utf8');
   const committed = readFileSync(committedPath, 'utf8');
 
-  if (fresh !== committed) {
+  if (fresh === committed) {
+    console.log(`OK: ${committedPath} está al día con openapi.yaml.`);
+  } else {
     console.error(
       `Error: ${committedPath} no coincide con openapi.yaml. Ejecuta \`pnpm contracts:generate\` y vuelve a comprobar.`,
     );
-    process.exit(1);
+    // process.exitCode (no process.exit): así el bloque finally borra el directorio temporal.
+    process.exitCode = 1;
   }
-  console.log(`OK: ${committedPath} está al día con openapi.yaml.`);
 } catch (error) {
   console.error(
     `Error al comprobar los tipos generados: ${error instanceof Error ? error.message : String(error)}`,
   );
-  process.exit(1);
+  process.exitCode = 1;
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

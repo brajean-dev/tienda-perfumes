@@ -1,4 +1,4 @@
-import { NotFoundError } from '../http/errors.ts';
+import { NotFoundError } from '../errors.ts';
 import {
   toBrandDto,
   toBrandSummaryDto,
@@ -40,9 +40,12 @@ export function createCatalogService(repository: CatalogRepository): CatalogServ
 
     async listPerfumes(brandSlug, options = {}) {
       const brand = await requireBrand(brandSlug);
-      // Un texto en blanco equivale a no buscar.
-      const query = options.query?.trim() || undefined;
-      const perfumes = await repository.listPerfumes(brand.id, query ? { query } : {});
+      // La búsqueda se pasa tal cual: el repositorio recorta los espacios y trata el texto en blanco
+      // como "sin búsqueda" (una sola regla, con pruebas contra la base de datos).
+      const perfumes = await repository.listPerfumes(
+        brand.id,
+        options.query === undefined ? {} : { query: options.query },
+      );
       return { items: perfumes.map((perfume) => toPerfumeDto(perfume, brand)) };
     },
 

@@ -6,6 +6,11 @@ info:
     Contrato de la API. Se actualiza en el mismo cambio que cada endpoint y los tipos de
     TypeScript se generan desde aquí (ver docs/decisions/0003-openapi-fuente-del-contrato.md y
     docs/decisions/0007-convenciones-http-de-la-api.md).
+
+
+    Errores que pueden salir en CUALQUIER ruta, además de los documentados en cada operación:
+    400 (`VALIDATION_ERROR`) si la URL está mal codificada o un parámetro es desmesurado, y 404
+    (`NOT_FOUND`) si la ruta no existe. Ambos tienen la forma de `ErrorResponse`.
 servers:
   - url: http://localhost:3000
     description: Desarrollo local
@@ -134,10 +139,15 @@ components:
       name: q
       in: query
       required: false
-      description: Texto a buscar en el nombre del perfume (se recortan los espacios; máximo 100 caracteres)
+      description: >-
+        Texto a buscar en el nombre del perfume. Máximo 100 caracteres tal como se envían (los
+        espacios del principio y del final cuentan para el máximo, pero se ignoran al buscar; un
+        texto en blanco equivale a no buscar). No admite caracteres de control, salvo el tabulador
+        y los saltos de línea.
       schema:
         type: string
         maxLength: 100
+        pattern: '^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$'
   responses:
     ValidationError:
       description: Algún parámetro no es válido (por ejemplo, un slug mal formado)

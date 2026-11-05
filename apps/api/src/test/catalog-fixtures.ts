@@ -96,7 +96,8 @@ export function createFakeCatalogRepository(
     async listPerfumes(brandId, options = {}): Promise<PerfumeRecord[]> {
       calls.listPerfumes.push({ brandId, query: options.query });
       const found = brands.find((brand) => brand.id === brandId);
-      const query = options.query?.toLowerCase();
+      // Igual que el repositorio real: recorta los espacios y un texto en blanco es "sin búsqueda".
+      const query = options.query?.trim().toLowerCase();
       return (found?.perfumes ?? []).filter(
         (perfume) => !query || perfume.name.toLowerCase().includes(query),
       );

@@ -23,8 +23,9 @@ La guía exige que `packages/contracts/openapi.yaml` sea el contrato de la API y
 ## Consecuencias
 
 - Cambiar un endpoint sin actualizar el yaml (o al revés) rompe una prueba en lugar de pasar desapercibido.
-- Hay dos dependencias de desarrollo en la API y una en `packages/contracts`, que la guía no menciona.
+- Dependencias que la guía no menciona, todas de desarrollo: `yaml` y `ajv` en `apps/api`, `openapi-typescript` y `typescript@5.9.3` en `packages/contracts`. Además, `apps/api` y `apps/web` dependen de `@tienda/contracts` (del propio workspace) solo para sus tipos.
 - **Dos versiones de TypeScript en el repositorio (comprobado en la Fase 5b):** `openapi-typescript` 7.13.0 declara compatibilidad solo con TypeScript 5 (`^5.x`), y `typescript@7.0.2` ya no exporta la API clásica (`ts.factory`) que usa: su paquete solo expone la versión y APIs `unstable/*`. Por eso `packages/contracts` fija `typescript@5.9.3` como dependencia propia; pnpm la aísla, de modo que `apps/api` y `apps/web` siguen en TypeScript 7.0.2. Es una rareza deliberada: si `openapi-typescript` publica una versión compatible con TypeScript 7, se elimina.
 - **Cómo se aplica:** los DTO de la API se tipan con los tipos generados (un campo que no coincida con el contrato rompe `pnpm typecheck`); `apps/api/src/contract/contract.test.ts` compara rutas, respuestas reales (200, 400, 404 y 500) y parámetros con el yaml; y `pnpm test` ejecuta `pnpm contracts:check`, que falla si `generated/schema.d.ts` no coincide con `openapi.yaml`.
-- Los esquemas de respuesta del yaml deben ser referencias a `components/schemas` (lo exige el ayudante `apps/api/src/test/contract.ts`).
+- Los esquemas de respuesta del yaml deben ser referencias a `components/schemas` (lo exige el ayudante `apps/api/src/test/contract.ts`). El ayudante también falla si el yaml usa un método HTTP que no sabe comprobar, y una prueba compila todos los esquemas de `components`, no solo los que alguna respuesta referencia.
+- Límites conocidos de las pruebas del contrato: comprueban esquemas de respuesta, parámetros (nombre, ubicación y obligatoriedad) y el tipo de contenido, pero no validan el documento OpenAPI completo ni los esquemas de las peticiones.
 - Sigue sin haber un validador completo de OpenAPI: las pruebas validan los esquemas de respuesta, no todo el documento.

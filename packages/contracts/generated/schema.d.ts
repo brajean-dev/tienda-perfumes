@@ -200,7 +200,7 @@ export interface components {
         BrandSlug: components["schemas"]["Slug"];
         /** @description Identificador legible del perfume dentro de su marca */
         PerfumeSlug: components["schemas"]["Slug"];
-        /** @description Texto a buscar en el nombre del perfume (se recortan los espacios; máximo 100 caracteres) */
+        /** @description Texto a buscar en el nombre del perfume. Máximo 100 caracteres tal como se envían (los espacios del principio y del final cuentan para el máximo, pero se ignoran al buscar; un texto en blanco equivale a no buscar). No admite caracteres de control, salvo el tabulador y los saltos de línea. */
         SearchQuery: string;
     };
     requestBodies: never;
@@ -284,7 +284,7 @@ export interface operations {
     listBrandPerfumes: {
         parameters: {
             query?: {
-                /** @description Texto a buscar en el nombre del perfume (se recortan los espacios; máximo 100 caracteres) */
+                /** @description Texto a buscar en el nombre del perfume. Máximo 100 caracteres tal como se envían (los espacios del principio y del final cuentan para el máximo, pero se ignoran al buscar; un texto en blanco equivale a no buscar). No admite caracteres de control, salvo el tabulador y los saltos de línea. */
                 q?: components["parameters"]["SearchQuery"];
             };
             header?: never;

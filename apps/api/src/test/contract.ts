@@ -12,6 +12,8 @@ const CONTRACT_PATH = fileURLToPath(
   new URL('../../../../packages/contracts/openapi.yaml', import.meta.url),
 );
 const HTTP_METHODS = ['get', 'put', 'post', 'patch', 'delete'] as const;
+// Campos de un path item que no son operaciones.
+const PATH_ITEM_FIELDS = new Set(['parameters', 'summary', 'description', 'servers', '$ref']);
 
 type JsonObject = Record<string, unknown>;
 
@@ -52,6 +54,15 @@ export function loadContract() {
 
   const operations: Operation[] = [];
   for (const [path, pathItem] of Object.entries(document.paths)) {
+    // Si el yaml usa un método que este ayudante no conoce (HEAD, OPTIONS, TRACE...), se falla en
+    // lugar de ignorarlo en silencio: una operación sin comprobar sería una brecha en las pruebas.
+    for (const key of Object.keys(pathItem)) {
+      if (!(HTTP_METHODS as readonly string[]).includes(key) && !PATH_ITEM_FIELDS.has(key)) {
+        throw new Error(
+          `El contrato usa "${key}" en ${path}, que el ayudante de pruebas no sabe comprobar`,
+        );
+      }
+    }
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method];
       if (!operation) continue;
@@ -101,7 +112,7 @@ export function loadContract() {
     operations,
 
     /** Parámetros documentados de una operación (resueltos si son referencias). */
-    parametersOf(operationId: string): Array<{ name: string; in: string }> {
+    parametersOf(operationId: string): Array<{ name: string; in: string; required: boolean }> {
       const operation = operations.find((candidate) => candidate.operationId === operationId);
       if (!operation) throw new Error(`El contrato no define la operación "${operationId}"`);
 
@@ -111,8 +122,25 @@ export function loadContract() {
         const resolved =
           typeof parameter.$ref === 'string' ? resolvePointer(document, parameter.$ref) : parameter;
         if (!isObject(resolved)) throw new Error(`Parámetro no resoluble en "${operationId}"`);
-        return { name: String(resolved.name), in: String(resolved.in) };
+        return {
+          name: String(resolved.name),
+          in: String(resolved.in),
+          required: resolved.required === true,
+        };
       });
+    },
+
+    /**
+     * Compila TODOS los esquemas de components.schemas, no solo los alcanzables desde una respuesta.
+     * Con `strict`, un esquema mal escrito (palabra clave desconocida, patrón inválido) lanza un
+     * error. Devuelve los nombres compilados.
+     */
+    compileAllSchemas(): string[] {
+      const names = Object.keys(document.components.schemas);
+      for (const name of names) {
+        ajv.compile({ $ref: `contract#/components/schemas/${name}` });
+      }
+      return names;
     },
 
     /** Valida un cuerpo de respuesta contra el esquema que el contrato documenta para ese estado. */

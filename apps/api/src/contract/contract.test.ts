@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type RegisteredRoute } from '../app.ts';
-import { SEARCH_MAX_LENGTH, SLUG_MAX_LENGTH, SLUG_PATTERN } from '../catalog/catalog.schemas.ts';
+import {
+  SEARCH_MAX_LENGTH,
+  SEARCH_PATTERN,
+  SLUG_MAX_LENGTH,
+  SLUG_PATTERN,
+} from '../catalog/catalog.schemas.ts';
 import {
   createFailingCatalogRepository,
   createFakeCatalogRepository,
@@ -59,6 +64,18 @@ const cases: Case[] = [
     operationId: 'listBrandPerfumes',
     status: 400,
     url: `/brands/marca-alfa/perfumes?q=${'a'.repeat(SEARCH_MAX_LENGTH + 1)}`,
+    backend: 'fake',
+  },
+  {
+    operationId: 'listBrandPerfumes',
+    status: 400,
+    url: '/brands/marca-alfa/perfumes?q=%00',
+    backend: 'fake',
+  },
+  {
+    operationId: 'listBrandPerfumes',
+    status: 400,
+    url: `/brands/marca-alfa/perfumes?q=a${'%20'.repeat(SEARCH_MAX_LENGTH + 50)}`,
     backend: 'fake',
   },
   {
@@ -165,6 +182,23 @@ describe('rutas de la API ↔ operaciones del contrato', () => {
 
     expect(query).toEqual(['q']);
   });
+
+  it('los parámetros de ruta son obligatorios y q es opcional', () => {
+    for (const operation of contract.operations) {
+      for (const parameter of contract.parametersOf(operation.operationId)) {
+        expect(parameter.required, `${operation.operationId}.${parameter.name}`).toBe(
+          parameter.in === 'path',
+        );
+      }
+    }
+  });
+
+  it('todos los esquemas de components.schemas compilan (también los que ninguna respuesta referencia)', () => {
+    const compiled = contract.compileAllSchemas();
+
+    expect(compiled).toEqual(expect.arrayContaining(['Perfume', 'ErrorResponse', 'Slug']));
+    expect(compiled).toEqual(Object.keys(contract.document.components.schemas));
+  });
 });
 
 describe('respuestas reales ↔ esquemas del contrato', () => {
@@ -174,6 +208,8 @@ describe('respuestas reales ↔ esquemas del contrato', () => {
     const response = await app.inject({ method: 'GET', url: testCase.url });
 
     expect(response.statusCode).toBe(testCase.status);
+    // El contrato documenta application/json en todas las respuestas.
+    expect(response.headers['content-type']).toContain('application/json');
     const { ok, errors } = contract.validateResponse(
       testCase.operationId,
       testCase.status,
@@ -262,11 +298,12 @@ describe('validación de entrada de la API ↔ lo que documenta el contrato', ()
     expect(slug.maxLength).toBe(SLUG_MAX_LENGTH);
   });
 
-  it('la longitud máxima de q coincide', () => {
+  it('la longitud máxima y el patrón de q coinciden', () => {
     const searchQuery = contract.document.components.parameters.SearchQuery as {
-      schema: { maxLength: number };
+      schema: { maxLength: number; pattern: string };
     };
 
     expect(searchQuery.schema.maxLength).toBe(SEARCH_MAX_LENGTH);
+    expect(searchQuery.schema.pattern).toBe(SEARCH_PATTERN.source);
   });
 });

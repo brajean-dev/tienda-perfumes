@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NotFoundError } from '../http/errors.ts';
+import { NotFoundError } from '../errors.ts';
 import { createFakeCatalogRepository } from '../test/catalog-fixtures.ts';
 import { createCatalogService } from './catalog.service.ts';
 
@@ -92,20 +92,21 @@ describe('listPerfumes', () => {
     expect(repository.calls.listPerfumes).toEqual([]);
   });
 
-  it('pasa la búsqueda recortada al repositorio', async () => {
+  // El recorte de espacios y la búsqueda en blanco los resuelve el repositorio (una sola regla,
+  // probada contra la base de datos en catalog.repository.db.test.ts). El servicio no la repite.
+  it('pasa la búsqueda tal cual al repositorio', async () => {
     const { service, repository } = setup();
 
     await service.listPerfumes('marca-alfa', { query: '  noche  ' });
 
-    expect(repository.calls.listPerfumes).toEqual([{ brandId: 'brand-1', query: 'noche' }]);
+    expect(repository.calls.listPerfumes).toEqual([{ brandId: 'brand-1', query: '  noche  ' }]);
   });
 
-  it.each(['', '   '])('una búsqueda en blanco (%j) equivale a no buscar', async (query) => {
+  it('sin búsqueda no pasa ningún texto al repositorio', async () => {
     const { service, repository } = setup();
 
-    const { items } = await service.listPerfumes('marca-alfa', { query });
+    await service.listPerfumes('marca-alfa');
 
-    expect(items).toHaveLength(2);
     expect(repository.calls.listPerfumes).toEqual([{ brandId: 'brand-1', query: undefined }]);
   });
 });

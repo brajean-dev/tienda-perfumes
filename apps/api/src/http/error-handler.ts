@@ -1,7 +1,6 @@
 import type { components } from '@tienda/contracts';
 import type { FastifyInstance, FastifyReply, FastifyServerOptions } from 'fastify';
-import { ZodError } from 'zod';
-import { NotFoundError } from './errors.ts';
+import { NotFoundError, RequestValidationError } from '../errors.ts';
 
 type ErrorResponse = components['schemas']['ErrorResponse'];
 type ErrorCode = ErrorResponse['error']['code'];
@@ -19,19 +18,24 @@ export const MAX_PARAM_LENGTH = 300;
 
 /**
  * Errores que Fastify resuelve ANTES de llegar a las rutas (URL mal codificada, parámetro por
- * encima del tope). No pasan por `setErrorHandler`, y su respuesta por defecto no es la del
- * contrato y repite la ruta recibida. Se responden con un 400 fijo.
+ * encima del tope). No pasan por `setErrorHandler` ni por el plugin de CORS, y su respuesta por
+ * defecto no es la del contrato y repite la ruta recibida. Se responden con un 400 fijo y, si la
+ * petición viene del origen permitido, con la cabecera de CORS (si no, la web vería un fallo de red
+ * en lugar del 400).
  */
-export const frameworkErrors: NonNullable<FastifyServerOptions['frameworkErrors']> = (
-  _error,
-  _request,
-  reply,
-) => {
-  // El tipo genérico de `reply` aquí es más estricto de lo necesario; se usa el estándar.
-  return (reply as FastifyReply)
-    .code(400)
-    .send(body('VALIDATION_ERROR', 'La solicitud no es válida.'));
-};
+export function createFrameworkErrors(
+  allowedOrigin: string,
+): NonNullable<FastifyServerOptions['frameworkErrors']> {
+  return (_error, request, reply) => {
+    // El tipo genérico de `reply` aquí es más estricto de lo necesario; se usa el estándar.
+    const response = reply as FastifyReply;
+    const origin = request.headers.origin;
+    if (origin !== undefined && origin === allowedOrigin) {
+      response.header('access-control-allow-origin', origin).header('vary', 'Origin');
+    }
+    return response.code(400).send(body('VALIDATION_ERROR', 'La solicitud no es válida.'));
+  };
+}
 
 /**
  * Forma única de los errores (contrato: ErrorResponse). Nunca se devuelven detalles internos en un
@@ -44,19 +48,17 @@ export function registerErrorHandling(app: FastifyInstance): void {
   });
 
   app.setErrorHandler((error, request, reply) => {
-    if (error instanceof ZodError) {
-      const detail = error.issues
-        .map((issue) => `${issue.path.join('.') || 'solicitud'}: ${issue.message}`)
-        .join('; ');
-      return reply.code(400).send(body('VALIDATION_ERROR', detail));
+    if (error instanceof RequestValidationError) {
+      return reply.code(400).send(body('VALIDATION_ERROR', error.message));
     }
 
     if (error instanceof NotFoundError) {
       return reply.code(404).send(body('NOT_FOUND', error.message));
     }
 
-    // Errores del cliente que Fastify detecta por su cuenta (URL demasiado larga, cabeceras...):
-    // el contrato solo documenta el 400 para ellos.
+    // Errores del cliente que Fastify detecta por su cuenta (cabeceras demasiado grandes...): el
+    // contrato solo documenta el 400 para ellos. Un ZodError que llegue aquí NO es del cliente
+    // (la entrada se valida con parseRequest): es un fallo interno y cae en el 500 de abajo.
     const statusCode = (error as { statusCode?: unknown }).statusCode;
     if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
       return reply.code(400).send(body('VALIDATION_ERROR', 'La solicitud no es válida.'));
