@@ -13,11 +13,11 @@ Alcance y criterios de aceptación: [`docs/spec.md`](docs/spec.md).
 ## Requisitos
 
 - **Node.js 24 o superior** (`node -v`).
-- **pnpm**, que viene con Node mediante Corepack: `corepack enable pnpm`. El proyecto fija la versión exacta.
+- **pnpm**. Node 24 trae Corepack, que lo activa con `corepack enable pnpm`; el proyecto fija la versión exacta. **A partir de Node 25 Corepack ya no viene incluido**: instálalo con `npm install --global corepack` o usa el instalador de pnpm (<https://pnpm.io/installation>). Si `corepack enable` da un error de permisos, es que tu Node está instalado en una carpeta del sistema.
 - **Docker** en marcha (Docker Desktop, o Docker Engine con Compose v2) para PostgreSQL.
-- **git**.
+- **git** y **bash** (los usa `pnpm db:test:prepare`).
 
-Probado en macOS (Intel) con Node 24 y Docker Desktop 4.48.
+Probado **solo en macOS (Intel)** con Node 24 y Docker Desktop 4.48. Linux y Windows no se han probado.
 
 ## Levántalo
 
@@ -40,6 +40,8 @@ Comprueba que funciona:
 - `curl http://localhost:3000/brands` → las 4 marcas con su número de perfumes.
 - `curl http://localhost:3000/brands/byredo/perfumes` → los perfumes de ejemplo de una marca.
 
+> **Cuánto tarda:** en un clon con las cachés de pnpm y de Docker ya calientes, los pasos desde `pnpm install` hasta `pnpm db:seed` sumaron unos 20 segundos. La primera vez en una máquina nueva depende de tu conexión, sobre todo de la instalación de dependencias y de la descarga de la imagen de PostgreSQL.
+
 > `pnpm env:init` no sobrescribe un `.env` que ya exista. No se llama `pnpm setup` porque esa es una orden de pnpm que modifica la configuración de tu shell.
 
 ## Comandos
@@ -50,6 +52,7 @@ Se ejecutan desde la raíz.
 | ----------------------------------- | ------------------------------------------------------------------------- |
 | `pnpm dev`                          | API y web en paralelo                                                     |
 | `pnpm test`                         | Pruebas de todo el proyecto, **sin Docker**                               |
+| `pnpm db:test:prepare`              | Crea y migra la base `perfumeria_test` (hazlo antes de `pnpm test:db`)    |
 | `pnpm test:db`                      | Pruebas de integración contra PostgreSQL (usan la base `perfumeria_test`) |
 | `pnpm typecheck` / `pnpm build`     | Comprobación de tipos / compilación                                       |
 | `pnpm format` / `pnpm format:check` | Formato con Prettier                                                      |
@@ -66,6 +69,7 @@ apps/api/            Fastify + TypeScript + Zod + Prisma
 packages/contracts/  Contrato de la API (openapi.yaml) y los tipos generados desde él
 scripts/             Utilidades: env:init y la preparación de la base de pruebas
 docs/                Especificación, glosario, decisiones (ADR) y planes
+.claude/             Agentes y skill de Claude Code (planificar, revisar, comprobar la documentación)
 docker-compose.yml   PostgreSQL para desarrollo local
 ```
 
@@ -73,14 +77,15 @@ El contrato manda: para cambiar un endpoint se edita `packages/contracts/openapi
 
 ## Si algo falla
 
-| Síntoma                                                     | Qué hacer                                                                                                                                                                                                            |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm: command not found`                                   | `corepack enable pnpm`                                                                                                                                                                                               |
-| `Cannot connect to the Docker daemon`                       | Abre Docker Desktop y espera a que arranque                                                                                                                                                                          |
-| El puerto 3000 o 5173 está ocupado                          | `lsof -nP -iTCP:3000 -sTCP:LISTEN` muestra quién lo usa. Para la API puedes cambiar `API_PORT` y `VITE_API_URL` en `.env`; el puerto de la web (5173) es fijo                                                        |
-| La API dice que falta `DATABASE_URL`                        | No existe `.env`: ejecuta `pnpm env:init`                                                                                                                                                                            |
-| Autenticación fallida con PostgreSQL tras rehacer el `.env` | PostgreSQL solo usa la contraseña al crear su volumen. Si cambiaste `.env`, borra el volumen con `docker compose down -v` (**borra los datos de la base**) y repite `pnpm db:up`, `pnpm db:migrate` y `pnpm db:seed` |
-| `Cannot find module` sobre `generated/prisma`               | `pnpm db:generate`                                                                                                                                                                                                   |
+| Síntoma                                                     | Qué hacer                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm: command not found`                                   | `corepack enable pnpm` (con Node 24). Con Node 25 o superior, instala Corepack o pnpm como se indica en Requisitos                                                                                                                                                                                                                 |
+| `pnpm db:up` falla por el puerto 5432                       | Otro PostgreSQL local lo está usando: `lsof -nP -iTCP:5432 -sTCP:LISTEN` muestra cuál. Páralo, o cambia el servicio de otro proyecto. El puerto 5432 es el que usan `docker-compose.yml` y `pnpm db:test:prepare`                                                                                                                  |
+| `Cannot connect to the Docker daemon`                       | Abre Docker Desktop y espera a que arranque                                                                                                                                                                                                                                                                                        |
+| El puerto 3000 o 5173 está ocupado                          | `lsof -nP -iTCP:3000 -sTCP:LISTEN` muestra quién lo usa. Para la API puedes cambiar `API_PORT` y `VITE_API_URL` en `.env`; el puerto de la web (5173) es fijo                                                                                                                                                                      |
+| La API dice que falta `DATABASE_URL`                        | No existe `.env`: ejecuta `pnpm env:init`                                                                                                                                                                                                                                                                                          |
+| Autenticación fallida con PostgreSQL tras rehacer el `.env` | PostgreSQL solo usa la contraseña al crear su volumen. **Lo más simple: recupera el `.env` anterior.** Si no lo tienes, rehacer el volumen con `docker compose down -v` **borra todos los datos (la base de desarrollo y la de pruebas)**; después repite `pnpm db:up`, `pnpm db:migrate`, `pnpm db:seed` y `pnpm db:test:prepare` |
+| `Cannot find module` sobre `generated/prisma`               | `pnpm db:generate`                                                                                                                                                                                                                                                                                                                 |
 
 ## Documentación
 

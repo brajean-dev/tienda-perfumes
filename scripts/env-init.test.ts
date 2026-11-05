@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -77,6 +78,18 @@ describe('initEnv con el .env.example real del repositorio', () => {
     assert.ok(envValue(env, 'TEST_DATABASE_URL').includes(':abc123@'));
   });
 
+  it('el .env.example real tiene "change-me" EXACTAMENTE en estas tres variables (y en ninguna más)', () => {
+    // Si alguien añade otra variable con "change-me" (por ejemplo una clave de API), el script le
+    // pondría la misma contraseña de la base de datos: esta prueba obliga a decidirlo a conciencia.
+    const variables = realTemplate
+      .split('\n')
+      .filter((line) => line.includes(PLACEHOLDER))
+      .map((line) => line.split('=')[0]);
+
+    assert.deepEqual(variables.sort(), ['DATABASE_URL', 'POSTGRES_PASSWORD', 'TEST_DATABASE_URL']);
+    assert.equal(realTemplate.split(PLACEHOLDER).length - 1, 3);
+  });
+
   it('solo cambia la contraseña: el resto del archivo queda idéntico', () => {
     initEnv(dir, 'abc123');
     const env = readFileSync(join(dir, '.env'), 'utf8');
@@ -127,16 +140,19 @@ describe('initEnv con el .env.example real del repositorio', () => {
     assert.equal(readFileSync(join(dir, '.env'), 'utf8'), 'MI_CONTRASEÑA=importante\n');
   });
 
-  it('el aviso de "ya existe" explica el problema de la contraseña del volumen', () => {
+  it('el aviso de "ya existe" explica el problema del volumen y avisa de lo destructivo del remedio', () => {
     writeFileSync(join(dir, '.env'), 'X=1\n');
 
     assert.throws(() => initEnv(dir), /docker compose down -v/);
+    assert.throws(() => initEnv(dir), /recuperar el \.env anterior/);
+    assert.throws(() => initEnv(dir), /TODOS los datos/);
+    assert.throws(() => initEnv(dir), /pnpm db:test:prepare/);
   });
 });
 
 describe('initEnv sin .env.example', () => {
   it('falla con un mensaje claro y no crea ningún .env', () => {
-    assert.throws(() => initEnv(dir), /No se encuentra .*\.env\.example/);
+    assert.throws(() => initEnv(dir), /No se encuentra .*\.env\.example.*git checkout/);
     assert.throws(() => readFileSync(join(dir, '.env')), /ENOENT/);
   });
 });
@@ -166,6 +182,36 @@ describe('línea de comandos (node scripts/env-init.ts)', () => {
       'la contraseña no debe salir por la salida estándar',
     );
     assert.ok(!result.stderr.includes(password), 'ni por la salida de errores');
+  });
+
+  it('funciona aunque el proyecto esté bajo un enlace simbólico (si no, no haría nada y sin avisar)', () => {
+    prepareProject();
+    const link = `${dir}-enlace`;
+    symlinkSync(dir, link);
+    try {
+      const result = spawnSync(process.execPath, [join(link, 'scripts', 'env-init.ts')], {
+        encoding: 'utf8',
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Creado \.env/);
+      assert.ok(statSync(join(dir, '.env')).isFile(), 'debe haber creado el .env');
+    } finally {
+      rmSync(link, { force: true });
+    }
+  });
+
+  it('importarlo como módulo no ejecuta nada (no crea ningún .env)', () => {
+    prepareProject();
+
+    const result = spawnSync(
+      process.execPath,
+      ['-e', `import(${JSON.stringify(join(dir, 'scripts', 'env-init.ts'))})`],
+      { encoding: 'utf8', cwd: dir },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.throws(() => readFileSync(join(dir, '.env')), /ENOENT/);
   });
 
   it('una segunda ejecución falla con código 1, explica por qué y no cambia el .env', () => {

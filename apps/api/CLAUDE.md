@@ -22,13 +22,17 @@ src/
   test/              Ayudantes de prueba: contrato, datos falsos, base de pruebas y sus salvaguardas
   contract/          Pruebas que comparan la API con openapi.yaml
   generated/         Cliente de Prisma generado (ignorado por git)
-prisma/              schema.prisma, migraciones, semilla y su prueba
+prisma/              schema.prisma, migraciones, seed.ts, seed-catalog.ts, seed-data.ts y su prueba
+prisma.config.ts     Configuración de Prisma (carga el .env raíz; URL de la base)
+vitest.config.ts     Pruebas unitarias (excluye *.db.test.ts)
+vitest.db.config.ts  Pruebas de integración contra PostgreSQL
 ```
 
 ## Cómo se ejecuta
 
 - **Node ejecuta TypeScript directamente en desarrollo, sin `tsx`.** Reglas: imports con extensión `.ts`, `import type` para los tipos y sintaxis "borrable" (`erasableSyntaxOnly`: sin `enum`, `namespace` ni parameter properties). `pnpm build` compila a `dist/` con `tsc` y reescribe las extensiones.
-- `pnpm --filter @tienda/api dev` usa `node --watch` y lee el `.env` raíz. Si el puerto 3000 está ocupado: `API_PORT=3005 pnpm --filter @tienda/api dev`.
+- `pnpm --filter @tienda/api dev` usa `node --watch` y lee el `.env` raíz. `start` ejecuta la versión compilada (`dist/`, tras `pnpm build`).
+- **Puerto 3000 ocupado** (pueden quedar procesos `node --watch` antiguos; `lsof -nP -iTCP:3000 -sTCP:LISTEN` muestra cuál): `API_PORT=3005 pnpm --filter @tienda/api dev`. Sirve para probar con `curl`; la web seguiría llamando al 3000 salvo que cambies también `VITE_API_URL`.
 - La API **exige `DATABASE_URL`** al arrancar. `GET /health` no consulta la base de datos.
 - Variables: `API_PORT` (3000), `API_HOST` (127.0.0.1), `WEB_ORIGIN` (único origen aceptado por CORS), `DATABASE_URL` y `TEST_DATABASE_URL`. Ver `.env.example`.
 
@@ -54,8 +58,8 @@ prisma/              schema.prisma, migraciones, semilla y su prueba
 
 - **Prisma fijado en la 7.10.1** (`prisma`, `@prisma/client`, `@prisma/adapter-pg`). La etiqueta `latest` de `prisma` apunta a una candidata 8.x: no la uses.
 - `pnpm install` genera el cliente en `src/generated/` (script `postinstall`); `pnpm db:generate` lo regenera. pnpm solo permite scripts de instalación a `prisma` y `@prisma/engines` (`allowBuilds` en `pnpm-workspace.yaml`).
-- Migraciones: `pnpm db:migrate`. Las que Prisma no puede generar solas (como `native_uuid`) se escriben a mano. **`prisma migrate reset` lo bloquea Prisma cuando lo lanza una IA:** lo debe ejecutar el usuario.
-- Semilla: `pnpm db:seed` (idempotente, no borra). `prisma/seed-data.ts` lleva 4 marcas reales (solo el nombre) y perfumes `[EJEMPLO]` sin precio, tamaño ni datos reales. **El repositorio es público.** Las notas deben salir de una fuente fiable y los precios los define el dueño de la tienda. `prisma/seed-data.test.ts` vigila que no se mezcle relleno con datos reales.
+- Migraciones: `pnpm db:migrate` (desarrollo; `pnpm --filter @tienda/api db:migrate:deploy` las aplica sin generar nada nuevo). Las que Prisma no puede generar solas (como `native_uuid`) se escriben a mano. **`prisma migrate reset` lo bloquea Prisma cuando lo lanza una IA:** lo debe ejecutar el usuario.
+- Semilla: `pnpm db:seed` (idempotente, no borra). `prisma/seed-data.ts` lleva 4 marcas reales (solo el nombre) y perfumes `[EJEMPLO]` sin precio, tamaño ni datos reales; las reglas sobre qué datos pueden entrar (fuente fiable, precios del dueño, repositorio público) están en el `CLAUDE.md` raíz. `prisma/seed-data.test.ts` vigila que no se mezcle relleno con datos reales.
 - Modelo y decisiones (precio en céntimos de sol, UUID nativo, slug único por marca): `docs/decisions/0006-modelo-de-datos-del-catalogo.md`.
 - **El orden alfabético se hace en el repositorio** con `Intl.Collator('es')` (`src/catalog/sorting.ts`), porque la base ordena por bytes. **La búsqueda distingue tildes**: limitación conocida. Prisma no escapa `%`, `_` ni `\` en `contains`: el repositorio los escapa.
 
@@ -67,7 +71,7 @@ prisma/              schema.prisma, migraciones, semilla y su prueba
 | `pnpm --filter @tienda/api test -t "<nombre>"` | Una prueba por nombre. **Sin `--`**: con `--` ejecuta todas                            |
 | `pnpm db:test:prepare` y `pnpm test:db`        | Crea y migra la base `perfumeria_test` / pruebas de integración contra PostgreSQL real |
 
-- Las pruebas `*.db.test.ts` **borran datos**: usan `perfumeria_test`, nunca la de desarrollo. Se niegan a ejecutarse (igual que `pnpm db:test:prepare`) si la base de `TEST_DATABASE_URL` no está en esta máquina, si su nombre no cumple `^[a-z0-9_]+_test$`, si es la misma que la de `DATABASE_URL` o si la URL lleva parámetros fuera de una lista blanca (nunca `?host=` ni `?port=`: el cliente `pg` los usa para sustituir al servidor). Las reglas viven en `src/test/safety.ts`.
+- Las pruebas `*.db.test.ts` **borran datos**: usan `perfumeria_test`, nunca la de desarrollo. Se niegan a ejecutarse si `TEST_DATABASE_URL` no está definida, no es una URL de PostgreSQL (`postgres:` o `postgresql:`), su base no está en esta máquina, su nombre no cumple `^[a-z0-9_]+_test$`, es la misma que la de `DATABASE_URL` o la URL lleva parámetros fuera de una lista blanca (nunca `?host=` ni `?port=`: el cliente `pg` los usa para sustituir al servidor). Las reglas viven en `src/test/safety.ts` y las comparte `pnpm db:test:prepare`, que además exige el puerto 5432 (el del contenedor de compose).
 - `src/contract/contract.test.ts` compara las rutas, las respuestas reales y los parámetros con `openapi.yaml`. El ayudante `src/test/contract.ts` falla ante métodos HTTP o referencias que no sabe comprobar.
 - Datos de prueba: `src/test/catalog-fixtures.ts` (inventados, no son del catálogo).
 
@@ -75,5 +79,4 @@ prisma/              schema.prisma, migraciones, semilla y su prueba
 
 - No añadas `tsx`, `dotenv` ni `fastify-type-provider-zod`: el proyecto resuelve esas necesidades con Node y Zod.
 - No uses `latest` de Prisma ni cambies los tipos del DTO a mano: salen del contrato.
-- No pongas en la semilla datos que no quieras publicar, ni precios o notas que no hayas verificado.
 - No registres ni devuelvas lo que escribe el cliente en las búsquedas.

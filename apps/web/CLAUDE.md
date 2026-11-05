@@ -26,7 +26,7 @@ vite.config.ts                     Vite y Vitest (jsdom)
 
 - `pnpm --filter @tienda/web dev` (o `pnpm dev` en la raíz). El puerto **5173 es fijo** (`strictPort`): la API solo acepta CORS desde `WEB_ORIGIN`, así que si el puerto cambiara en silencio, fallaría.
 - La web lee el `.env` **raíz** (`envDir: '../..'`). Vite solo expone al navegador lo que empieza por `VITE_`: **todo `VITE_*` es público, no pongas secretos ahí.** La única es `VITE_API_URL` (por defecto `http://localhost:3000`); un valor vacío cuenta como no definido y la barra final se ignora (`resolveApiUrl`).
-- `pnpm build` ejecuta `tsc --noEmit` y después `vite build`.
+- `pnpm build` ejecuta `tsc --noEmit` y después `vite build`; `pnpm --filter @tienda/web preview` sirve el resultado.
 
 ## Contrato y tipos
 
@@ -60,7 +60,7 @@ vite.config.ts                     Vite y Vitest (jsdom)
 
 ## Para la Fase 6 (todavía no hecho)
 
-- **`react-router` no está instalado.** La guía no lo lista: consulta antes de añadirlo. La búsqueda y los filtros deberían conservarse en la URL (parámetros de consulta).
+- **`react-router` no está instalado:** consulta antes de añadirlo (regla de dependencias del `CLAUDE.md` raíz). La búsqueda y los filtros deberían conservarse en la URL (parámetros de consulta).
 - Los precios llegan como `{ amountCents, currency: "PEN" }` o `null`: nunca muestres `0` ni inventes un precio; si es `null`, indica que está por definir.
 - Las imágenes son placeholders por ahora (`imageUrl` es `null`); el diseño debe permitir sustituirlas por fotos propias.
 - Las notas llegan por capas (`top`, `heart`, `base`) y las ocasiones como texto libre; una lista vacía significa "sin dato".
@@ -68,6 +68,5 @@ vite.config.ts                     Vite y Vitest (jsdom)
 
 ## No hagas esto
 
-- No añadas dependencias sin consultarlas (la guía pide revisar antes si lo resuelve lo ya instalado).
-- No escribas a mano los tipos de la API ni pongas secretos en `VITE_*`.
+- No escribas a mano los tipos de la API.
 - No cambies el puerto 5173 sin cambiar también `WEB_ORIGIN`.

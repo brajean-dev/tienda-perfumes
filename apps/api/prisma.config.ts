@@ -20,7 +20,7 @@ const COMMANDS_THAT_NEED_DATABASE =
   /(^|\s)(migrate\s+(dev|deploy|status|reset|resolve)|db\s+(seed|push|pull|execute))(\s|$)/;
 const needsDatabase = COMMANDS_THAT_NEED_DATABASE.test(process.argv.slice(2).join(' '));
 if (needsDatabase && !databaseUrl) {
-  throw new Error('DATABASE_URL no está definida. Copia .env.example a .env y revisa sus valores.');
+  throw new Error('DATABASE_URL no está definida. Ejecuta `pnpm env:init` para crear el .env.');
 }
 
 export default defineConfig({

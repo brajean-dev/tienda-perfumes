@@ -11,7 +11,7 @@
 // - El nombre es env:init y no "setup" porque `pnpm setup` es una orden de pnpm que modifica la
 //   configuración del shell, y se ejecutaría esa en lugar de este script.
 import { randomBytes } from 'node:crypto';
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,7 +42,7 @@ export function initEnv(directory: string, password: string = generatePassword()
     template = readFileSync(examplePath, 'utf8');
   } catch {
     throw new Error(
-      `No se encuentra ${examplePath}. Ejecuta este comando desde la raíz del proyecto.`,
+      `No se encuentra ${examplePath}. Restáuralo con \`git checkout -- .env.example\`.`,
     );
   }
 
@@ -54,18 +54,40 @@ export function initEnv(directory: string, password: string = generatePassword()
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       throw new Error(
-        'Ya existe un .env y no se sobrescribe. Si quieres crearlo de nuevo, bórralo primero.\n' +
-          'Ojo: PostgreSQL solo usa POSTGRES_PASSWORD al crear su volumen la primera vez; si ya había ' +
-          'una base creada con otra contraseña, ejecuta también `docker compose down -v` (borra sus datos).',
+        'Ya existe un .env y no se sobrescribe. Si lo borras y lo creas de nuevo, la contraseña será otra.\n' +
+          'Ojo: PostgreSQL solo usa POSTGRES_PASSWORD al crear su volumen la primera vez. Si la base ya existe, ' +
+          'lo más simple es recuperar el .env anterior. Rehacer el volumen con `docker compose down -v` ' +
+          'borra TODOS los datos (la base de desarrollo y la de pruebas): hazlo tú, a conciencia, y después ' +
+          'repite `pnpm db:up`, `pnpm db:migrate`, `pnpm db:seed` y `pnpm db:test:prepare`.',
       );
     }
     throw error;
   }
-  chmodSync(envPath, 0o600);
+  try {
+    chmodSync(envPath, 0o600);
+  } catch {
+    // Redundante con el `mode` de arriba: en sistemas sin permisos tipo POSIX (Windows) no es fatal.
+  }
   return envPath;
 }
 
-if (import.meta.main) {
+// `import.meta.main` solo existe desde Node 24.2 (y es experimental): en una 24.0 o 24.1 valdría
+// `undefined` y este script terminaría sin hacer nada y sin avisar. Se compara con la ruta del archivo.
+// Se comparan RUTAS REALES: si el proyecto está bajo un enlace simbólico (en macOS, /var y /tmp lo
+// son), `process.argv[1]` conserva el enlace pero `import.meta.url` no, y no coincidirían.
+function isRunDirectly(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return realpathSync(resolve(entry)) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+const isMain = isRunDirectly();
+
+if (isMain) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   try {
     initEnv(root);
