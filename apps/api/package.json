@@ -24,9 +24,12 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@tienda/contracts": "workspace:*",
     "@types/node": "^26.6.6",
+    "ajv": "^8.20.0",
     "prisma": "7.10.1",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   }
 }

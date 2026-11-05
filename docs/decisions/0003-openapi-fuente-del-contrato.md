@@ -1,6 +1,6 @@
 # 0003. `openapi.yaml` como contrato y cómo mantenerlo sincronizado
 
-- **Estado:** Aceptado (2026-11-05; se implementa en la Fase 5b)
+- **Estado:** Aceptado el 2026-11-05 e implementado en la Fase 5b
 - **Fecha:** 2026-11-04
 
 ## Contexto
@@ -24,5 +24,7 @@ La guía exige que `packages/contracts/openapi.yaml` sea el contrato de la API y
 
 - Cambiar un endpoint sin actualizar el yaml (o al revés) rompe una prueba en lugar de pasar desapercibido.
 - Hay dos dependencias de desarrollo en la API y una en `packages/contracts`, que la guía no menciona.
-- **Riesgo por comprobar en la 5b:** `openapi-typescript` declara compatibilidad con TypeScript 5 y el proyecto usa la 7. Si no funciona, se usará TypeScript 5.x acotado al paquete de contratos.
+- **Dos versiones de TypeScript en el repositorio (comprobado en la Fase 5b):** `openapi-typescript` 7.13.0 declara compatibilidad solo con TypeScript 5 (`^5.x`), y `typescript@7.0.2` ya no exporta la API clásica (`ts.factory`) que usa: su paquete solo expone la versión y APIs `unstable/*`. Por eso `packages/contracts` fija `typescript@5.9.3` como dependencia propia; pnpm la aísla, de modo que `apps/api` y `apps/web` siguen en TypeScript 7.0.2. Es una rareza deliberada: si `openapi-typescript` publica una versión compatible con TypeScript 7, se elimina.
+- **Cómo se aplica:** los DTO de la API se tipan con los tipos generados (un campo que no coincida con el contrato rompe `pnpm typecheck`); `apps/api/src/contract/contract.test.ts` compara rutas, respuestas reales (200, 400, 404 y 500) y parámetros con el yaml; y `pnpm test` ejecuta `pnpm contracts:check`, que falla si `generated/schema.d.ts` no coincide con `openapi.yaml`.
+- Los esquemas de respuesta del yaml deben ser referencias a `components/schemas` (lo exige el ayudante `apps/api/src/test/contract.ts`).
 - Sigue sin haber un validador completo de OpenAPI: las pruebas validan los esquemas de respuesta, no todo el documento.

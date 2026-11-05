@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import './zod-es.ts';
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -9,6 +10,8 @@ const envSchema = z.object({
     .url({ protocol: /^https?$/ })
     .default('http://localhost:5173')
     .transform((value) => new URL(value).origin),
+  // Obligatoria: sin ella la API no puede servir el catálogo, así que se falla al arrancar.
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -16,7 +19,9 @@ export type Config = z.infer<typeof envSchema>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = envSchema.safeParse(env);
   if (!result.success) {
-    throw new Error(`Configuración inválida:\n${z.prettifyError(result.error)}`);
+    throw new Error(
+      `Configuración inválida (revisa tu .env, ver .env.example):\n${z.prettifyError(result.error)}`,
+    );
   }
   return result.data;
 }

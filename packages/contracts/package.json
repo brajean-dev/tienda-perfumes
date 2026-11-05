@@ -2,5 +2,21 @@
   "name": "@tienda/contracts",
   "version": "0.0.0",
   "private": true,
-  "description": "Contratos de la API: fuente OpenAPI en openapi.yaml"
+  "description": "Contratos de la API: fuente OpenAPI en openapi.yaml y tipos generados",
+  "type": "module",
+  "types": "./generated/schema.d.ts",
+  "exports": {
+    ".": {
+      "types": "./generated/schema.d.ts"
+    }
+  },
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml -o generated/schema.d.ts",
+    "check": "node scripts/check-generated.ts",
+    "test": "pnpm run check"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
 }
