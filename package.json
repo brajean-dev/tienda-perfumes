@@ -12,8 +12,13 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:up": "docker compose up -d db",
-    "db:down": "docker compose down"
+    "test:db": "pnpm --filter @tienda/api test:db",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @tienda/api db:generate",
+    "db:migrate": "pnpm --filter @tienda/api db:migrate",
+    "db:seed": "pnpm --filter @tienda/api db:seed",
+    "db:test:prepare": "bash scripts/db-test-prepare.sh"
   },
   "devDependencies": {
     "prettier": "3.9.10"

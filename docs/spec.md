@@ -1,6 +1,6 @@
 # Especificación: tienda web de perfumes
 
-**Estado:** borrador v0.2 · 2026-11-04 · fuentes: guía del proyecto y decisiones de Brajean
+**Estado:** borrador v0.3 · 2026-11-05 · fuentes: guía del proyecto y decisiones de Brajean
 
 ## Problema
 
@@ -54,11 +54,13 @@ Monorepo pnpm con `apps/web` (React + Vite + TypeScript), `apps/api` (Fastify + 
 - **Marcas reales**, por ahora de perfumería de nicho.
 - **Imágenes:** placeholders en v1, con `imageUrl` listo para sustituirlas por fotos propias.
 - **Precios:** los asigna Brajean; no se inventan ni se copian de otras tiendas.
+- **Notas olfativas** en tres listas (salida, corazón y fondo) y **ocasiones de uso** como texto libre por ahora; precio en céntimos de sol, opcional (ver ADR 0006).
+- **Sincronización contrato–código:** pruebas contra `openapi.yaml` y tipos generados (ver ADR 0003).
+- **Datos de ejemplo:** el catálogo inicial lleva cuatro marcas reales de nicho (Byredo, Le Labo, Maison Francis Kurkdjian y Xerjoff), solo con su nombre, y perfumes `[EJEMPLO]` sin precio ni datos reales.
 
 ## Preguntas abiertas
 
-- **Lista inicial de marcas y perfumes** de nicho (qué marcas, cuántos perfumes por marca).
+- **Lista definitiva de marcas y perfumes** de nicho que se publicarán.
 - **Origen y verificación de las notas olfativas** de cada perfume real: deben salir de una fuente fiable, no de memoria ni de un modelo de lenguaje.
-- **Cómo se modelan las notas** (salida, corazón y fondo, o lista simple) y **qué ocasiones** existen (lista cerrada o texto libre).
-- Cómo carga Brajean los precios sin panel de administración (propuesta: archivo de datos del `seed`).
-- Mecanismo para mantener sincronizados contrato y código (ver ADR 0003).
+- **Lista cerrada de ocasiones de uso**, cuando haya suficientes perfumes reales para definirla.
+- Cómo carga Brajean los precios sin panel de administración (por ahora: editando los datos del `seed`, `apps/api/prisma/seed-data.ts`).

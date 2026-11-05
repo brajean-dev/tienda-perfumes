@@ -21,15 +21,18 @@ No sustituyas estas tecnologías ni cambies la estructura sin una instrucción e
 
 Usa siempre `pnpm` (versión fijada en `packageManager`; Node >= 24). Se ejecutan desde la raíz.
 
-| Comando                                        | Qué hace                                                                            |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `pnpm install`                                 | Instala dependencias de todo el workspace                                           |
-| `pnpm db:up` / `pnpm db:down`                  | Inicia / detiene PostgreSQL con Docker Compose (requiere `.env` y Docker corriendo) |
-| `pnpm format` / `pnpm format:check`            | Aplica / comprueba formato con Prettier                                             |
-| `pnpm dev`                                     | API en `:3000` y web en `:5173` en paralelo                                         |
-| `pnpm test`, `pnpm build`, `pnpm typecheck`    | Ejecutan Vitest, la compilación y `tsc --noEmit` en cada app                        |
-| `pnpm --filter @tienda/api test`               | Pruebas de una sola app (cambia el filtro por `@tienda/web`)                        |
-| `pnpm --filter @tienda/api test -t "<nombre>"` | Una sola prueba por nombre (sin `--`: con `--` ejecuta todas)                       |
+| Comando                                        | Qué hace                                                                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| `pnpm install`                                 | Instala dependencias de todo el workspace                                         |
+| `pnpm db:up` / `pnpm db:down`                  | Inicia (espera a que esté sana) / detiene PostgreSQL con Docker Compose           |
+| `pnpm db:migrate` / `pnpm db:seed`             | Aplica migraciones de desarrollo (Prisma) / carga los datos semilla (idempotente) |
+| `pnpm db:generate`                             | Regenera el cliente de Prisma (`pnpm install` también lo hace en un clon nuevo)   |
+| `pnpm db:test:prepare` y `pnpm test:db`        | Crea y migra la base `perfumeria_test` / pruebas de integración contra PostgreSQL |
+| `pnpm format` / `pnpm format:check`            | Aplica / comprueba formato con Prettier                                           |
+| `pnpm dev`                                     | API en `:3000` y web en `:5173` en paralelo                                       |
+| `pnpm test`, `pnpm build`, `pnpm typecheck`    | Ejecutan Vitest, la compilación y `tsc --noEmit` en cada app                      |
+| `pnpm --filter @tienda/api test`               | Pruebas de una sola app (cambia el filtro por `@tienda/web`)                      |
+| `pnpm --filter @tienda/api test -t "<nombre>"` | Una sola prueba por nombre (sin `--`: con `--` ejecuta todas)                     |
 
 Detalles del entorno:
 
@@ -37,6 +40,11 @@ Detalles del entorno:
 - La API ejecuta TypeScript con Node directamente en desarrollo (sin `tsx`): usa imports con extensión `.ts` y sintaxis "borrable" (`erasableSyntaxOnly`; sin `enum` ni parameter properties). `pnpm build` compila a `dist/` con `tsc`.
 - El puerto de la web es fijo (`strictPort`): la API solo acepta CORS desde `WEB_ORIGIN`.
 - `GET /health` no consulta la base de datos; solo indica que la API responde.
+- `pnpm test` no necesita Docker. Las pruebas `*.db.test.ts` usan la base `perfumeria_test`, nunca la de desarrollo: se niegan a ejecutarse (igual que `pnpm db:test:prepare`) si la base de `TEST_DATABASE_URL` no está en esta máquina, si su nombre no cumple `^[a-z0-9_]+_test$`, si es la misma que la de `DATABASE_URL` o si la URL lleva parámetros fuera de una lista blanca (nunca `?host=` ni `?port=`: el cliente `pg` los usa para sustituir al servidor). Las reglas viven en `apps/api/src/test/safety.ts`.
+- El orden alfabético se hace en el repositorio con `Intl.Collator('es')` (la base ordena por bytes). La búsqueda por nombre distingue tildes: limitación conocida (ADR 0006).
+- Las migraciones de Prisma que no se pueden generar solas (como `native_uuid`) se escriben a mano. `prisma migrate reset` lo bloquea Prisma cuando lo lanza una IA: lo debe ejecutar el usuario.
+- Prisma está fijado en la 7.10.1 (`latest` apunta a una candidata 8.x: no la uses). El cliente generado va en `apps/api/src/generated/` (ignorado por git). pnpm solo permite scripts de instalación a `prisma` y `@prisma/engines` (`allowBuilds`).
+- La semilla (`apps/api/prisma/seed-data.ts`) lleva marcas reales y perfumes `[EJEMPLO]`. El repositorio es público: no pongas allí datos que no quieras publicar. Decisiones del modelo: `docs/decisions/0006-modelo-de-datos-del-catalogo.md`.
 
 ## Flujo de trabajo
 
@@ -55,5 +63,5 @@ Detalles del entorno:
 
 ## Decisiones pendientes
 
-- ADR 0003 (`Propuesto`): test que valida respuestas contra el yaml y `openapi-typescript`. No añadas esas dependencias sin aprobación.
+- ADR 0003 (`Aceptado`, se implementa en la Fase 5b): pruebas que validan la API contra `openapi.yaml` (`yaml` + `ajv`) y tipos generados con `openapi-typescript`. Comprobar su compatibilidad con TypeScript 7 antes de adoptarla.
 - Cualquier otra dependencia no listada en la guía (por ejemplo `react-router` en la Fase 6): consultar antes de instalar.
