@@ -11,8 +11,8 @@ La guía pide modelar explícitamente que cada perfume pertenece a una marca, y 
 
 Dos tablas en PostgreSQL, gestionadas con Prisma (`apps/api/prisma/schema.prisma`):
 
-- **`Brand`**: `id` (texto con un UUID generado por Prisma), `slug` único, `name`, `description?` y marcas de tiempo.
-- **`Perfume`**: `id` (igual), `slug`, `name`, `description?`, `sizeMl?`, `priceCents?`, `imageUrl?`, `notesTop[]`, `notesHeart[]`, `notesBase[]`, `occasions[]`, `brandId` obligatorio y marcas de tiempo.
+- **`Brand`**: `id` (UUID nativo de PostgreSQL, generado por Prisma), `slug` único, `name`, `description?` y marcas de tiempo.
+- **`Perfume`**: `id` (UUID nativo), `slug`, `name`, `description?`, `sizeMl?`, `priceCents?`, `imageUrl?`, `notesTop[]`, `notesHeart[]`, `notesBase[]`, `occasions[]`, `brandId` obligatorio y marcas de tiempo.
 
 Reglas:
 
@@ -28,8 +28,9 @@ Reglas:
 - **Tabla `Note` y tabla `Occasion` normalizadas:** permiten filtrar y reutilizar, pero añaden tablas, relaciones y migraciones para un catálogo pequeño y con taxonomía aún indefinida. Se reevalúa cuando se decida la lista de ocasiones.
 - **`Decimal` para el precio:** Prisma lo devuelve como objeto que hay que serializar; un entero en céntimos es más simple.
 - **Una sola lista de notas:** más simple, pero pierde la estructura por capas que describe el perfume.
-- **Tipo `uuid` nativo de PostgreSQL (`@db.Uuid`) para los identificadores:** más compacto y valida el formato en la base. Se dejaron como texto, que es el valor por defecto de Prisma para `String @id @default(uuid())`; el catálogo es pequeño y las URLs usan slugs, no ids. Cambiarlo después requiere una migración.
-- **Restricciones `CHECK` (`priceCents >= 0`, `sizeMl > 0`):** Prisma no las expresa en el esquema y habría que editar la migración a mano. Sin panel de administración y con la semilla como única fuente de datos, no se añaden por ahora; la validación vive en la API (Fase 5b).
+- **Identificadores como texto (el valor por defecto de Prisma para `String @id @default(uuid())`):** más simple, pero ocupa más y la base no valida el formato. Se empezó así y se cambió a `@db.Uuid` el mismo día con la migración `native_uuid`, que convierte las columnas conservando los datos. Prisma no la genera sola (no hay conversión automática de texto a `uuid`), por eso el SQL está escrito a mano y Prisma comprueba que coincide con el esquema.
+- **Restricciones `CHECK` (`priceCents >= 0`, `sizeMl > 0`):** decisión del dueño del proyecto: no se añaden. Prisma no las expresa en el esquema y habría que editar la migración a mano. Sin panel de administración y con la semilla como única fuente de datos, la validación vive en la API (Fase 5b) y en `seed-data.test.ts`, que comprueba que el precio sea un entero ≥ 0 y el tamaño un entero > 0.
+- **Quitar `@@index([brandId])`:** es redundante, porque el índice único `(brandId, slug)` ya cubre las búsquedas por `brandId` como prefijo. Se conserva a propósito: cuesta un índice más en un catálogo pequeño, y quitarlo obligaría a regenerar `init` con un `migrate reset`, comando que Prisma bloquea cuando lo lanza una IA sin consentimiento explícito.
 - **Slug único global:** más simple, pero obliga a inventar sufijos cuando dos marcas comparten nombre de perfume.
 
 ## Consecuencias
@@ -37,5 +38,7 @@ Reglas:
 - Las columnas de tipo arreglo son anulables en PostgreSQL aunque Prisma las trate como listas no nulas; escribir `NULL` con SQL directo es posible y no debe hacerse.
 - Filtrar por ocasión es sencillo con arreglos, pero sin vocabulario controlado las variantes de escritura ("oficina", "Oficina") no se unifican.
 - Prisma pasa `contains` a `LIKE` sin escapar `%`, `_` ni `\`; el repositorio los escapa para que la búsqueda sea literal (hay pruebas que lo verifican).
+- **Orden alfabético:** la base de datos (`postgres:17-alpine`) ordena por bytes: "Zeta" antes que "alfa" y "Édition" al final. El repositorio ordena con `Intl.Collator('es')` y desempata por `slug` (`src/catalog/sorting.ts`). Es suficiente mientras el catálogo sea pequeño; si se pagina, habrá que llevar el orden a la base con una colación explícita.
+- **Búsqueda sin tildes (limitación conocida):** `mode: 'insensitive'` ignora mayúsculas pero no tildes, así que "dia" no encuentra "Día Claro". Para un público hispanohablante conviene resolverlo más adelante con la extensión `unaccent` de PostgreSQL (disponible en la imagen), lo que exige una migración y consultas SQL directas porque Prisma no la expresa. Una prueba documenta el comportamiento actual.
 - El cliente de Prisma se genera en `apps/api/src/generated/` (ignorado por git) y se regenera con `pnpm install` en un clon nuevo o con `pnpm db:generate`.
 - Versión fijada: Prisma 7.10.1. La etiqueta `latest` de `prisma` apunta a una candidata (8.0.0-rc); no se usa.

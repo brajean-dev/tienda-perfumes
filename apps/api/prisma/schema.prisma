@@ -1,4 +1,5 @@
 // Modelo del catálogo. Decisiones y alternativas: docs/decisions/0006-modelo-de-datos-del-catalogo.md
+// Los identificadores son UUID nativos: el cambio desde texto está en la migración `native_uuid`.
 
 generator client {
   provider            = "prisma-client"
@@ -12,7 +13,7 @@ datasource db {
 }
 
 model Brand {
-  id          String    @id @default(uuid())
+  id          String    @id @default(uuid()) @db.Uuid
   slug        String    @unique
   name        String
   description String?
@@ -22,7 +23,7 @@ model Brand {
 }
 
 model Perfume {
-  id          String   @id @default(uuid())
+  id          String   @id @default(uuid()) @db.Uuid
   slug        String
   name        String
   description String?
@@ -36,7 +37,7 @@ model Perfume {
   notesBase   String[] @default([])
   // Texto libre por ahora; la lista de ocasiones está por definir.
   occasions   String[] @default([])
-  brandId     String
+  brandId     String   @db.Uuid
   brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

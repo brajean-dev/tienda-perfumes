@@ -25,8 +25,8 @@ afterAll(async () => {
 });
 
 describe('listBrands', () => {
-  it('ordena por nombre e incluye el número de perfumes', async () => {
-    const zeta = await createBrand('zeta', 'Zeta');
+  it('incluye el número de perfumes de cada marca', async () => {
+    await createBrand('zeta', 'Zeta');
     const alfa = await createBrand('alfa', 'Alfa');
     await createPerfume(alfa.id, 'uno', 'Uno');
     await createPerfume(alfa.id, 'dos', 'Dos');
@@ -37,7 +37,40 @@ describe('listBrands', () => {
       ['Alfa', 2],
       ['Zeta', 0],
     ]);
-    expect(zeta.id).toBeTruthy();
+  });
+
+  it('ordena con la colación del español, no por bytes (mayúsculas, minúsculas y tildes)', async () => {
+    for (const [slug, name] of [
+      ['zeta', 'Zeta'],
+      ['alfa', 'alfa'],
+      ['edition', 'Édition'],
+      ['frederic', 'Frédéric'],
+      ['byredo', 'Byredo'],
+      ['le-labo', 'le labo'],
+    ] as const) {
+      await createBrand(slug, name);
+    }
+
+    const brands = await repository.listBrands();
+
+    // Con el orden por bytes de la base de datos saldría: Byredo, Frédéric, Zeta, alfa, le labo, Édition.
+    expect(brands.map((b) => b.name)).toEqual([
+      'alfa',
+      'Byredo',
+      'Édition',
+      'Frédéric',
+      'le labo',
+      'Zeta',
+    ]);
+  });
+
+  it('desempata por slug si dos marcas tienen el mismo nombre', async () => {
+    await createBrand('clasica-b', 'Clásica');
+    await createBrand('clasica-a', 'Clásica');
+
+    const brands = await repository.listBrands();
+
+    expect(brands.map((b) => b.slug)).toEqual(['clasica-a', 'clasica-b']);
   });
 
   it('devuelve una lista vacía si no hay marcas', async () => {
@@ -75,12 +108,33 @@ describe('listPerfumes', () => {
     expect(perfumes.map((p) => p.name)).toEqual(['Día Claro', 'Noche Azul']);
   });
 
+  it('ordena los perfumes con la colación del español', async () => {
+    const a = await createBrand('a', 'Marca A');
+    await createPerfume(a.id, 'zafiro', 'Zafiro');
+    await createPerfume(a.id, 'ambar', 'ámbar');
+    await createPerfume(a.id, 'oud', 'Oud');
+    await createPerfume(a.id, 'eden', 'Edén');
+
+    const perfumes = await repository.listPerfumes(a.id);
+
+    expect(perfumes.map((p) => p.name)).toEqual(['ámbar', 'Edén', 'Oud', 'Zafiro']);
+  });
+
   it('busca por nombre sin distinguir mayúsculas', async () => {
     const { a } = await setup();
 
     const perfumes = await repository.listPerfumes(a.id, { query: 'NOCHE' });
 
     expect(perfumes.map((p) => p.slug)).toEqual(['noche-azul']);
+  });
+
+  it('limitación conocida: la búsqueda distingue tildes ("dia" no encuentra "Día Claro")', async () => {
+    const { a } = await setup();
+
+    expect(await repository.listPerfumes(a.id, { query: 'dia' })).toEqual([]);
+    expect((await repository.listPerfumes(a.id, { query: 'día' })).map((p) => p.slug)).toEqual([
+      'dia-claro',
+    ]);
   });
 
   it('trata el texto buscado de forma literal (un "%" o "_" no son comodines)', async () => {
@@ -161,6 +215,13 @@ describe('findPerfume', () => {
 });
 
 describe('restricciones de la base de datos', () => {
+  it('guarda los identificadores como UUID nativo y rechaza ids que no lo son', async () => {
+    const a = await createBrand('a', 'Marca A');
+
+    expect(a.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    await expect(createPerfume('no-es-un-uuid', 'x', 'X')).rejects.toThrow();
+  });
+
   it('rechaza un perfume sin marca existente (clave foránea)', async () => {
     await expect(
       createPerfume('00000000-0000-0000-0000-000000000000', 'huerfano', 'Huérfano'),
@@ -191,23 +252,38 @@ describe('restricciones de la base de datos', () => {
 });
 
 describe('seedCatalog', () => {
+  // Los conteos salen de los propios datos semilla, para que estas pruebas sigan valiendo
+  // cuando se carguen datos reales. La validez de esos datos se comprueba en seed-data.test.ts.
+  const expectedBrands = seedBrands.length;
+  const expectedPerfumes = seedBrands.reduce((total, brand) => total + brand.perfumes.length, 0);
+
   it('es idempotente: aplicarla dos veces no duplica filas', async () => {
     const first = await seedCatalog(prisma, seedBrands);
     const second = await seedCatalog(prisma, seedBrands);
 
-    expect(first).toEqual({ brands: 4, perfumes: 8 });
+    expect(first).toEqual({ brands: expectedBrands, perfumes: expectedPerfumes });
     expect(second).toEqual(first);
-    expect(await prisma.brand.count()).toBe(4);
-    expect(await prisma.perfume.count()).toBe(8);
+    expect(await prisma.brand.count()).toBe(expectedBrands);
+    expect(await prisma.perfume.count()).toBe(expectedPerfumes);
   });
 
-  it('no deja precios ni tamaños inventados en los perfumes de ejemplo', async () => {
+  it('guarda cada dato tal como está en la semilla, sin añadir precios ni tamaños', async () => {
     await seedCatalog(prisma, seedBrands);
 
-    const perfumes = await prisma.perfume.findMany();
+    for (const seedBrand of seedBrands) {
+      for (const seedPerfume of seedBrand.perfumes) {
+        const saved = await repository.findPerfume(seedBrand.slug, seedPerfume.slug);
 
-    expect(perfumes.every((p) => p.priceCents === null && p.sizeMl === null)).toBe(true);
-    expect(perfumes.every((p) => p.name.startsWith('[EJEMPLO]'))).toBe(true);
+        expect(saved).toMatchObject({
+          name: seedPerfume.name,
+          priceCents: seedPerfume.priceCents ?? null,
+          sizeMl: seedPerfume.sizeMl ?? null,
+          imageUrl: seedPerfume.imageUrl ?? null,
+          notesTop: seedPerfume.notesTop,
+          occasions: seedPerfume.occasions,
+        });
+      }
+    }
   });
 
   it('no borra datos que no estén en la semilla', async () => {

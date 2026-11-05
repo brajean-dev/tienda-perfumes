@@ -1,4 +1,5 @@
 import type { PrismaClient } from '../db/client.ts';
+import { compareByName } from './sorting.ts';
 
 // Registros del dominio: no exponen tipos de Prisma al resto de la API.
 export type BrandRecord = {
@@ -65,18 +66,21 @@ export function createCatalogRepository(prisma: PrismaClient): CatalogRepository
     async listBrands() {
       const brands = await prisma.brand.findMany({
         select: { ...brandSelect, _count: { select: { perfumes: true } } },
-        orderBy: { name: 'asc' },
       });
-      return brands.map(({ _count, ...brand }) => ({ ...brand, perfumeCount: _count.perfumes }));
+      return brands
+        .map(({ _count, ...brand }) => ({ ...brand, perfumeCount: _count.perfumes }))
+        .sort(compareByName);
     },
 
     findBrandBySlug(slug) {
       return prisma.brand.findUnique({ where: { slug }, select: brandSelect });
     },
 
-    listPerfumes(brandId, options = {}) {
+    async listPerfumes(brandId, options = {}) {
       const query = options.query?.trim();
-      return prisma.perfume.findMany({
+      // `insensitive` ignora mayúsculas pero NO tildes: "dia" no encuentra "Día Claro"
+      // (limitación conocida, ver ADR 0006).
+      const perfumes = await prisma.perfume.findMany({
         where: {
           brandId,
           ...(query
@@ -84,8 +88,8 @@ export function createCatalogRepository(prisma: PrismaClient): CatalogRepository
             : {}),
         },
         select: perfumeSelect,
-        orderBy: { name: 'asc' },
       });
+      return perfumes.sort(compareByName);
     },
 
     findPerfume(brandSlug, perfumeSlug) {

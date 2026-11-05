@@ -1,0 +1,74 @@
+// Salvaguardas para la base de pruebas de integración, que BORRA datos.
+// Una sola implementación, usada por las pruebas (createTestPrisma) y por scripts/db-test-prepare.sh
+// (a través de safety-cli.ts), para que ambos apliquen exactamente las mismas reglas.
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// Solo minúsculas, números y guion bajo, y con sufijo "_test". La lista blanca también evita que
+// el nombre llegue al SQL del script con comillas u otros caracteres peligrosos.
+const TEST_DATABASE_NAME = /^[a-z0-9_]+_test$/;
+
+function parseUrl(value: string, label: string): URL {
+  try {
+    return new URL(value);
+  } catch {
+    throw new Error(`${label} no es una URL válida.`);
+  }
+}
+
+function databaseName(url: URL): string {
+  const raw = url.pathname.replace(/^\//, '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Comprueba que la URL apunta a una base de pruebas inofensiva y devuelve su nombre.
+ * Lanza un Error con un mensaje claro si algo no cuadra. `developmentUrl` es la base de desarrollo.
+ */
+export function assertSafeTestDatabaseUrl(
+  testUrl: string | undefined,
+  developmentUrl?: string,
+): string {
+  if (!testUrl) {
+    throw new Error('TEST_DATABASE_URL no está definida. Revisa tu .env (ver .env.example).');
+  }
+
+  const test = parseUrl(testUrl, 'TEST_DATABASE_URL');
+
+  if (test.protocol !== 'postgresql:' && test.protocol !== 'postgres:') {
+    throw new Error(
+      `TEST_DATABASE_URL debe ser una URL de PostgreSQL (recibida: "${test.protocol}").`,
+    );
+  }
+  if (!LOCAL_HOSTS.has(test.hostname)) {
+    throw new Error(
+      `Por seguridad, la base de pruebas debe estar en esta máquina (localhost o 127.0.0.1), no en "${test.hostname}".`,
+    );
+  }
+
+  const name = databaseName(test);
+  if (!TEST_DATABASE_NAME.test(name)) {
+    throw new Error(
+      `Por seguridad, el nombre de la base de pruebas debe terminar en "_test" y usar solo minúsculas, números y guion bajo (recibido: "${name}").`,
+    );
+  }
+
+  if (developmentUrl) {
+    let development: URL | undefined;
+    try {
+      development = new URL(developmentUrl);
+    } catch {
+      // Si DATABASE_URL no es una URL válida no puede coincidir con la de pruebas.
+    }
+    if (development && development.host === test.host && databaseName(development) === name) {
+      throw new Error(
+        'TEST_DATABASE_URL apunta a la misma base que DATABASE_URL (borraría tus datos).',
+      );
+    }
+  }
+
+  return name;
+}

@@ -1,38 +1,33 @@
 #!/usr/bin/env bash
 # Crea (si no existe) la base de pruebas y le aplica las migraciones.
-# Nunca toca la base de desarrollo: se niega a continuar si los nombres coinciden o si
-# la base de pruebas no termina en "_test". Requiere `pnpm db:up` y un .env con TEST_DATABASE_URL.
+#
+# Nunca toca la base de desarrollo. Las reglas de seguridad (base local, nombre acabado en "_test",
+# distinta de la de desarrollo) están en apps/api/src/test/safety.ts, las mismas que usan las pruebas.
+# El .env NO se ejecuta como shell: lo lee Node (`--env-file`), que lo interpreta como datos.
+# Requiere `pnpm db:up` y un .env con TEST_DATABASE_URL (ver .env.example).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-set -a
-# shellcheck disable=SC1091
-. ./.env
-set +a
-
-: "${TEST_DATABASE_URL:?Define TEST_DATABASE_URL en .env (ver .env.example)}"
-: "${POSTGRES_USER:?Define POSTGRES_USER en .env}"
-: "${POSTGRES_DB:?Define POSTGRES_DB en .env}"
-
-# Nombre de la base de pruebas: lo que hay tras la última "/" y antes de un posible "?".
-TEST_DB="${TEST_DATABASE_URL##*/}"
-TEST_DB="${TEST_DB%%\?*}"
-
-if [[ "$TEST_DB" == "$POSTGRES_DB" ]]; then
-  echo "Error: la base de pruebas ($TEST_DB) no puede ser la de desarrollo." >&2
-  exit 1
-fi
-if [[ "$TEST_DB" != *_test ]]; then
-  echo "Error: por seguridad, la base de pruebas debe terminar en \"_test\" (es \"$TEST_DB\")." >&2
+if [[ ! -f .env ]]; then
+  echo "Error: no existe .env. Copia .env.example a .env y ajusta los valores." >&2
   exit 1
 fi
 
-exists=$(docker compose exec -T db psql -U "$POSTGRES_USER" -d postgres -tAc \
-  "SELECT 1 FROM pg_database WHERE datname = '$TEST_DB'")
+# Valida TEST_DATABASE_URL y devuelve el nombre de la base. Falla con un motivo claro si no es segura.
+TEST_DB="$(node --env-file=.env apps/api/src/test/safety-cli.ts)"
+TEST_DATABASE_URL="$(node --env-file=.env -p 'process.env.TEST_DATABASE_URL')"
+
+# TEST_DB ya pasó la lista blanca [a-z0-9_]+_test, así que es seguro usarlo dentro del SQL.
+exists="$(docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d postgres -tA' <<SQL
+SELECT 1 FROM pg_database WHERE datname = '$TEST_DB';
+SQL
+)"
 
 if [[ "$exists" != "1" ]]; then
   echo "Creando la base \"$TEST_DB\"..."
-  docker compose exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE \"$TEST_DB\""
+  docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1' <<SQL
+CREATE DATABASE "$TEST_DB";
+SQL
 else
   echo "La base \"$TEST_DB\" ya existe."
 fi
