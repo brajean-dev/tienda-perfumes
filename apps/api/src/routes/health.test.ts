@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
 
 const WEB_ORIGIN = 'http://localhost:5173';
+const FOREIGN_ORIGIN = 'https://sitio-ajeno.example';
 
 describe('GET /health', () => {
   let app: FastifyInstance;
@@ -38,10 +39,52 @@ describe('GET /health', () => {
     const denied = await app.inject({
       method: 'GET',
       url: '/health',
-      headers: { origin: 'https://sitio-ajeno.example' },
+      headers: { origin: FOREIGN_ORIGIN },
     });
 
     expect(allowed.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('preflight CORS (OPTIONS /health)', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    app = await buildApp({ WEB_ORIGIN });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('responde al origen permitido y solo anuncia métodos de lectura', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: { origin: WEB_ORIGIN, 'access-control-request-method': 'GET' },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
+
+    const methods = String(response.headers['access-control-allow-methods'])
+      .split(',')
+      .map((method) => method.trim());
+    expect(methods).toContain('GET');
+    expect(methods).not.toContain('POST');
+    expect(methods).not.toContain('DELETE');
+  });
+
+  it('no concede el origen a un sitio ajeno (el navegador bloqueará la petición)', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: { origin: FOREIGN_ORIGIN, 'access-control-request-method': 'GET' },
+    });
+
+    // Lo que decide el navegador es Access-Control-Allow-Origin; sin él, no hay acceso.
+    // (@fastify/cors sí anuncia Allow-Methods aunque el origen no esté permitido; no concede nada.)
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 });

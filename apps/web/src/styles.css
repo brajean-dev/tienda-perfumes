@@ -59,7 +59,8 @@ button {
   cursor: pointer;
 }
 
-button:focus-visible {
+button:focus-visible,
+.health__status:focus-visible {
   outline: 3px solid #8a6a2f;
   outline-offset: 2px;
 }

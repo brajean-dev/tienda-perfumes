@@ -20,6 +20,12 @@ describe('loadConfig', () => {
     );
   });
 
+  it('acepta https', () => {
+    expect(loadConfig({ WEB_ORIGIN: 'https://tienda.example' }).WEB_ORIGIN).toBe(
+      'https://tienda.example',
+    );
+  });
+
   it.each(['abc', '0', '70000', ''])('rechaza un puerto inválido (%j)', (port) => {
     expect(() => loadConfig({ API_PORT: port })).toThrow(/Configuración inválida/);
   });
@@ -27,4 +33,11 @@ describe('loadConfig', () => {
   it('rechaza un WEB_ORIGIN que no es una URL', () => {
     expect(() => loadConfig({ WEB_ORIGIN: 'no-es-una-url' })).toThrow(/Configuración inválida/);
   });
+
+  it.each(['file:///tmp/index.html', 'data:text/plain,hola', 'ftp://localhost:5173'])(
+    'rechaza un WEB_ORIGIN con esquema distinto de http(s) (%s)',
+    (origin) => {
+      expect(() => loadConfig({ WEB_ORIGIN: origin })).toThrow(/Configuración inválida/);
+    },
+  );
 });

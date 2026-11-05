@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchHealth } from './healthApi';
+import { fetchHealth, HealthError } from './healthApi';
 
 export type HealthState =
   { status: 'loading' } | { status: 'connected' } | { status: 'error'; message: string };
+
+function errorMessage(error: unknown, timedOut: boolean): string {
+  if (timedOut) return 'Sin conexión con la API. Tardó demasiado en responder.';
+  if (error instanceof HealthError && error.kind === 'bad-response') {
+    return 'La API respondió de forma inesperada.';
+  }
+  return 'Sin conexión con la API. No se pudo conectar.';
+}
 
 export function useHealth(timeoutMs = 5000) {
   const [state, setState] = useState<HealthState>({ status: 'loading' });
@@ -19,14 +27,10 @@ export function useHealth(timeoutMs = 5000) {
       .then(() => {
         if (!cancelled) setState({ status: 'connected' });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
-        setState({
-          status: 'error',
-          message: controller.signal.aborted
-            ? 'La API tardó demasiado en responder.'
-            : 'No se pudo conectar con la API.',
-        });
+        // Si no se canceló por desmontaje y la señal está abortada, fue el tiempo límite.
+        setState({ status: 'error', message: errorMessage(error, controller.signal.aborted) });
       })
       .finally(() => clearTimeout(timer));
 
