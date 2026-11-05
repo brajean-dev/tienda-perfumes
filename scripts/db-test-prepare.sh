@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [[ ! -f .env ]]; then
-  echo "Error: no existe .env. Copia .env.example a .env y ajusta los valores." >&2
+  echo "Error: no existe .env. Ejecuta \`pnpm env:init\` (crea el .env con una contraseña aleatoria)." >&2
   exit 1
 fi
 

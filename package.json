@@ -1,13 +1,16 @@
 {
   "name": "tienda-perfumes",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@12.16.1",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "dev": "pnpm -r --parallel --if-present dev",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --if-present test && pnpm test:scripts",
+    "test:scripts": "node --test \"scripts/**/*.test.ts\"",
+    "env:init": "node scripts/env-init.ts",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "format": "prettier --write .",
