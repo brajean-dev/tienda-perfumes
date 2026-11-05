@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tienda web de perfumería de nicho para público hispanohablante, con precios en soles (PEN). La propuesta de valor es que la persona conozca el perfume (notas olfativas y ocasión de uso) antes de elegirlo. Alcance, fuera de alcance y criterios de aceptación: `docs/spec.md`. Vocabulario: `docs/glossary.md`. Decisiones técnicas: `docs/decisions/`. Cómo levantarlo: `README.md`.
 
-> **"La guía del proyecto"**, que citan varios ADR, es el documento inicial que escribió el dueño. No está versionado en el repositorio: sus reglas están recogidas en este archivo, en los `CLAUDE.md` de cada app y en `docs/spec.md`.
+> **"La guía del proyecto"**, que citan varios ADR, es el documento inicial que escribió el dueño y está conservado tal cual en `docs/guia-del-proyecto.md`. No describe el estado actual (si contradice a `docs/spec.md`, a los ADR o a estos `CLAUDE.md`, mandan ellos): sus reglas están recogidas en este archivo, en los `CLAUDE.md` de cada app y en `docs/spec.md`.
 
 ## Estructura (monorepo pnpm workspaces)
 
@@ -77,4 +77,3 @@ Otros scripts de cada app (`start`, `db:migrate:deploy`, `preview`...) están en
 
 - Cualquier dependencia que no esté ya instalada (por ejemplo `react-router` en la Fase 6): consultar antes de instalar.
 - Licencia: el repositorio es público pero no tiene `LICENSE`; decide el dueño.
-- Si se versiona "la guía del proyecto" (por ejemplo como `docs/guia-del-proyecto.md`): decide el dueño.

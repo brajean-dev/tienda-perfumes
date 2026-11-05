@@ -93,6 +93,7 @@ El contrato manda: para cambiar un endpoint se edita `packages/contracts/openapi
 - [`docs/glossary.md`](docs/glossary.md): vocabulario del dominio.
 - [`docs/decisions/`](docs/decisions/): decisiones técnicas (ADR), con sus alternativas.
 - [`docs/plans/`](docs/plans/): planes de implementación.
+- [`docs/guia-del-proyecto.md`](docs/guia-del-proyecto.md): la guía inicial con la que se planteó el proyecto, conservada tal cual (no describe el estado actual).
 
 ## Cómo se trabaja
 
