@@ -1,6 +1,6 @@
 # 0003. `openapi.yaml` como contrato y cómo mantenerlo sincronizado
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado (2026-11-05; se implementa en la Fase 5b)
 - **Fecha:** 2026-11-04
 
 ## Contexto
@@ -9,12 +9,10 @@ La guía exige que `packages/contracts/openapi.yaml` sea el contrato de la API y
 
 ## Decisión
 
-**Ya definido por la guía:** `openapi.yaml` es el contrato y se actualiza en el mismo cambio que el endpoint.
+`openapi.yaml` es el contrato y se actualiza en el mismo cambio que el endpoint (definido por la guía). Para mantenerlo sincronizado se adoptan **ambas** medidas, decididas por el dueño del proyecto el 2026-11-05:
 
-**Propuesto, pendiente de aprobación** (ambos añaden dependencias o código):
-
-1. Una prueba Vitest en `apps/api` que valide las respuestas reales contra el yaml.
-2. Generar los tipos de `apps/web` desde el yaml con `openapi-typescript`, en lugar de mantenerlos a mano.
+1. **Pruebas Vitest en `apps/api` contra el yaml:** las rutas registradas en Fastify y las del contrato deben coincidir, y las respuestas reales (incluidos los errores 400 y 404) deben cumplir los esquemas del contrato. Dependencias: `yaml` y `ajv` (solo desarrollo).
+2. **Tipos generados con `openapi-typescript`** desde el yaml, en `packages/contracts`, para que la web los importe en lugar de mantenerlos a mano. Se versiona el archivo generado y un script comprueba que no esté desactualizado.
 
 ## Alternativas consideradas
 
@@ -24,5 +22,7 @@ La guía exige que `packages/contracts/openapi.yaml` sea el contrato de la API y
 
 ## Consecuencias
 
-- Sin las dos medidas propuestas, la sincronización depende de la revisión (por ejemplo, del agente `contract-checker`, si se crea).
-- Decidir antes de la Fase 5, cuando aparecen los endpoints del catálogo.
+- Cambiar un endpoint sin actualizar el yaml (o al revés) rompe una prueba en lugar de pasar desapercibido.
+- Hay dos dependencias de desarrollo en la API y una en `packages/contracts`, que la guía no menciona.
+- **Riesgo por comprobar en la 5b:** `openapi-typescript` declara compatibilidad con TypeScript 5 y el proyecto usa la 7. Si no funciona, se usará TypeScript 5.x acotado al paquete de contratos.
+- Sigue sin haber un validador completo de OpenAPI: las pruebas validan los esquemas de respuesta, no todo el documento.

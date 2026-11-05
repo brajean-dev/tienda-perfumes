@@ -4,6 +4,9 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Cliente de Prisma generado (se regenera con `pnpm install` o `pnpm db:generate`)
+apps/api/src/generated/
+
 # Entorno: .env nunca se versiona; .env.example sí
 .env
 .env.*
