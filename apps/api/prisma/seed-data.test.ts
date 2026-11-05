@@ -28,11 +28,8 @@ function mentionsExample(perfume: SeedPerfume): boolean {
 }
 
 describe('seed-data: estructura', () => {
-  it('tiene al menos una marca y cada marca tiene perfumes', () => {
+  it('tiene al menos una marca (una marca sin perfumes sí es válida)', () => {
     expect(brands.length).toBeGreaterThan(0);
-    for (const brand of brands) {
-      expect(brand.perfumes.length, brand.slug).toBeGreaterThan(0);
-    }
   });
 
   it('usa slugs válidos (minúsculas, números y guiones) y únicos', () => {

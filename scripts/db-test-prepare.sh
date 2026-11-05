@@ -17,6 +17,14 @@ fi
 TEST_DB="$(node --env-file=.env apps/api/src/test/safety-cli.ts)"
 TEST_DATABASE_URL="$(node --env-file=.env -p 'process.env.TEST_DATABASE_URL')"
 
+# La base se crea dentro del contenedor de compose, que publica PostgreSQL en el puerto 5432. Si la URL
+# apuntara a otro puerto, la base se crearía en un sitio y se migraría en otro: se rechaza antes.
+TEST_PORT="$(node --env-file=.env -p 'new URL(process.env.TEST_DATABASE_URL).port || "5432"')"
+if [[ "$TEST_PORT" != "5432" ]]; then
+  echo "Error: este script crea la base en el contenedor de compose (puerto 5432), pero TEST_DATABASE_URL usa el puerto $TEST_PORT." >&2
+  exit 1
+fi
+
 # TEST_DB ya pasó la lista blanca [a-z0-9_]+_test, así que es seguro usarlo dentro del SQL.
 exists="$(docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d postgres -tA' <<SQL
 SELECT 1 FROM pg_database WHERE datname = '$TEST_DB';

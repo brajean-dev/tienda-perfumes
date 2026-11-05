@@ -58,6 +58,44 @@ describe('assertSafeTestDatabaseUrl', () => {
     expect(() => assertSafeTestDatabaseUrl(url)).toThrow(/_test/);
   });
 
+  it.each([
+    'postgresql://u:p@localhost/x_test?host=prod.ejemplo.com',
+    'postgresql://u:p@localhost/x_test?port=6543',
+    'postgresql://u:p@localhost/x_test?hostaddr=10.0.0.5',
+    'postgresql://u:p@localhost/x_test?sslmode=disable&host=prod.ejemplo.com',
+    'postgresql://u:p@localhost/x_test?HOST=prod.ejemplo.com',
+    'postgresql://u:p@localhost/x_test?service=produccion',
+  ])('rechaza parámetros que podrían redirigir la conexión a otro servidor (%s)', (url) => {
+    expect(() => assertSafeTestDatabaseUrl(url)).toThrow(/no admite el parámetro/);
+  });
+
+  it('acepta los parámetros de la lista blanca', () => {
+    const url = 'postgresql://u:p@localhost/x_test?sslmode=disable&connect_timeout=5&schema=public';
+
+    expect(assertSafeTestDatabaseUrl(url)).toBe('x_test');
+  });
+
+  it('acepta el host en mayúsculas (no se normaliza solo con este esquema de URL)', () => {
+    expect(assertSafeTestDatabaseUrl('postgresql://u:p@LOCALHOST:5432/x_test')).toBe('x_test');
+  });
+
+  it.each([
+    [
+      'postgresql://u:p@127.0.0.1:5432/perfumeria_test',
+      'postgresql://u:p@localhost/perfumeria_test',
+    ],
+    [
+      'postgresql://u:p@localhost/perfumeria_test',
+      'postgresql://u:p@localhost:5432/perfumeria_test',
+    ],
+    ['postgresql://u:p@[::1]:5432/perfumeria_test', 'postgresql://u:p@LOCALHOST/perfumeria_test'],
+  ])(
+    'detecta la misma base aunque se escriba distinto el servidor (%s frente a %s)',
+    (development, test) => {
+      expect(() => assertSafeTestDatabaseUrl(test, development)).toThrow(/misma base/);
+    },
+  );
+
   it('rechaza una base de pruebas idéntica a la de desarrollo', () => {
     const same = 'postgresql://user:pass@localhost:5432/perfumeria_test';
 

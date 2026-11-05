@@ -3,9 +3,23 @@
 // (a través de safety-cli.ts), para que ambos apliquen exactamente las mismas reglas.
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const DEFAULT_PORT = '5432';
+
 // Solo minúsculas, números y guion bajo, y con sufijo "_test". La lista blanca también evita que
 // el nombre llegue al SQL del script con comillas u otros caracteres peligrosos.
 const TEST_DATABASE_NAME = /^[a-z0-9_]+_test$/;
+
+// Parámetros de la URL que se admiten. Es una lista BLANCA a propósito: el cliente de PostgreSQL
+// (`pg`) deja que `?host=`, `?hostaddr=` o `?port=` sustituyan al servidor de la URL, y entonces
+// la comprobación de "servidor local" validaría un host y la conexión iría a otro.
+const ALLOWED_QUERY_PARAMS = new Set([
+  'sslmode',
+  'schema',
+  'connect_timeout',
+  'application_name',
+  'connection_limit',
+  'pool_timeout',
+]);
 
 function parseUrl(value: string, label: string): URL {
   try {
@@ -22,6 +36,18 @@ function databaseName(url: URL): string {
   } catch {
     return raw;
   }
+}
+
+// Los nombres de host no se pasan a minúsculas solos con esquemas como `postgresql:`.
+function normalizedHost(url: URL): string {
+  return url.hostname.toLowerCase();
+}
+
+// Dos URLs apuntan al mismo servidor si coinciden host y puerto; localhost, 127.0.0.1 y ::1 cuentan
+// como el mismo, y un puerto ausente es el 5432.
+function serverKey(url: URL): string {
+  const host = normalizedHost(url);
+  return `${LOCAL_HOSTS.has(host) ? 'local' : host}:${url.port || DEFAULT_PORT}`;
 }
 
 /**
@@ -43,7 +69,16 @@ export function assertSafeTestDatabaseUrl(
       `TEST_DATABASE_URL debe ser una URL de PostgreSQL (recibida: "${test.protocol}").`,
     );
   }
-  if (!LOCAL_HOSTS.has(test.hostname)) {
+
+  for (const key of test.searchParams.keys()) {
+    if (!ALLOWED_QUERY_PARAMS.has(key)) {
+      throw new Error(
+        `Por seguridad, TEST_DATABASE_URL no admite el parámetro "${key}" (podría redirigir la conexión a otro servidor). Parámetros permitidos: ${[...ALLOWED_QUERY_PARAMS].join(', ')}.`,
+      );
+    }
+  }
+
+  if (!LOCAL_HOSTS.has(normalizedHost(test))) {
     throw new Error(
       `Por seguridad, la base de pruebas debe estar en esta máquina (localhost o 127.0.0.1), no en "${test.hostname}".`,
     );
@@ -63,7 +98,11 @@ export function assertSafeTestDatabaseUrl(
     } catch {
       // Si DATABASE_URL no es una URL válida no puede coincidir con la de pruebas.
     }
-    if (development && development.host === test.host && databaseName(development) === name) {
+    if (
+      development &&
+      serverKey(development) === serverKey(test) &&
+      databaseName(development) === name
+    ) {
       throw new Error(
         'TEST_DATABASE_URL apunta a la misma base que DATABASE_URL (borraría tus datos).',
       );
