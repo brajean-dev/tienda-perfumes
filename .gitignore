@@ -1,0 +1,18 @@
+# Dependencias y compilación
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Entorno: .env nunca se versiona; .env.example sí
+.env
+.env.*
+!.env.example
+
+# Sistema y herramientas
+.DS_Store
+*.log
+.pnpm-store/
+
+# Configuración local de Claude Code (agentes y skills sí se versionan)
+.claude/settings.local.json

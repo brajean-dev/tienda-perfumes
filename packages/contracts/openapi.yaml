@@ -1,0 +1,11 @@
+openapi: 3.1.0
+info:
+  title: API de la tienda de perfumes
+  version: 0.1.0
+  description: >-
+    Contrato de la API. Se actualiza en el mismo cambio que cada endpoint
+    (ver docs/decisions/0003-openapi-fuente-del-contrato.md).
+servers:
+  - url: http://localhost:3000
+    description: Desarrollo local
+paths: {}
