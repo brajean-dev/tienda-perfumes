@@ -8,4 +8,33 @@ info:
 servers:
   - url: http://localhost:3000
     description: Desarrollo local
-paths: {}
+tags:
+  - name: Health
+    description: Disponibilidad de la API
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Comprueba que la API está disponible
+      description: >-
+        Indica que el proceso de la API responde. No consulta la base de datos.
+      responses:
+        '200':
+          description: La API está disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]

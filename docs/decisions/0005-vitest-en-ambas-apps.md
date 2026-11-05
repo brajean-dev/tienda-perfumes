@@ -18,5 +18,6 @@ Vitest como único ejecutor de pruebas. En `apps/api`, las rutas se prueban con 
 
 ## Consecuencias
 
-- Probar componentes React requiere un entorno de DOM (`jsdom`) y `@testing-library/react`. Son dependencias que la guía no menciona y están **pendientes de aprobación**.
+- Probar componentes React requiere un entorno de DOM (`jsdom`) y `@testing-library/react` (con su peer `@testing-library/dom`). La guía no los menciona; fueron **aprobadas el 2026-11-05** al iniciar la Fase 4. No se añadieron `jest-dom` ni `user-event`: bastan las aserciones simples y `fireEvent`.
+- Sin los "globals" de Vitest, Testing Library no limpia el DOM sola; `apps/web/src/test/setup.ts` registra la limpieza.
 - Si una comprobación no se ejecuta, se dice explícitamente; no se da por pasada.
