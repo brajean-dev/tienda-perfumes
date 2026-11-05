@@ -1,6 +1,8 @@
-// Contrato: packages/contracts/openapi.yaml (operationId: getHealth).
-// Tipo escrito a mano; la sincronización automática se decide en el ADR 0003.
-export type HealthResponse = { status: 'ok' };
+import type { components } from '@tienda/contracts';
+
+// Contrato: packages/contracts/openapi.yaml (operationId: getHealth). El tipo se genera desde el
+// yaml (`pnpm contracts:generate`), así que no puede separarse de él (ADR 0003).
+export type HealthResponse = components['schemas']['HealthResponse'];
 
 // 'network': no hubo respuesta (API caída, CORS, DNS). 'bad-response': la API respondió, pero mal.
 export type HealthErrorKind = 'network' | 'bad-response';

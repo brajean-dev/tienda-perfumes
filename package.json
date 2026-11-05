@@ -18,7 +18,9 @@
     "db:generate": "pnpm --filter @tienda/api db:generate",
     "db:migrate": "pnpm --filter @tienda/api db:migrate",
     "db:seed": "pnpm --filter @tienda/api db:seed",
-    "db:test:prepare": "bash scripts/db-test-prepare.sh"
+    "db:test:prepare": "bash scripts/db-test-prepare.sh",
+    "contracts:generate": "pnpm --filter @tienda/contracts generate",
+    "contracts:check": "pnpm --filter @tienda/contracts check"
   },
   "devDependencies": {
     "prettier": "3.9.10"

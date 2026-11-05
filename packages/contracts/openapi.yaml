@@ -1,16 +1,24 @@
 openapi: 3.1.0
 info:
   title: API de la tienda de perfumes
-  version: 0.1.0
+  version: 0.2.0
   description: >-
-    Contrato de la API. Se actualiza en el mismo cambio que cada endpoint
-    (ver docs/decisions/0003-openapi-fuente-del-contrato.md).
+    Contrato de la API. Se actualiza en el mismo cambio que cada endpoint y los tipos de
+    TypeScript se generan desde aquí (ver docs/decisions/0003-openapi-fuente-del-contrato.md y
+    docs/decisions/0007-convenciones-http-de-la-api.md).
+
+
+    Errores que pueden salir en CUALQUIER ruta, además de los documentados en cada operación:
+    400 (`VALIDATION_ERROR`) si la URL está mal codificada o un parámetro es desmesurado, y 404
+    (`NOT_FOUND`) si la ruta no existe. Ambos tienen la forma de `ErrorResponse`.
 servers:
   - url: http://localhost:3000
     description: Desarrollo local
 tags:
   - name: Health
     description: Disponibilidad de la API
+  - name: Catalog
+    description: Marcas y perfumes (solo lectura)
 paths:
   /health:
     get:
@@ -28,7 +36,137 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
+  /brands:
+    get:
+      tags: [Catalog]
+      operationId: listBrands
+      summary: Lista las marcas
+      description: >-
+        Todas las marcas, ordenadas por nombre con la colación del español, con el número de
+        perfumes de cada una.
+      responses:
+        '200':
+          description: Lista de marcas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandListResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /brands/{brandSlug}:
+    get:
+      tags: [Catalog]
+      operationId: getBrand
+      summary: Obtiene una marca
+      parameters:
+        - $ref: '#/components/parameters/BrandSlug'
+      responses:
+        '200':
+          description: La marca
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /brands/{brandSlug}/perfumes:
+    get:
+      tags: [Catalog]
+      operationId: listBrandPerfumes
+      summary: Lista los perfumes de una marca
+      description: >-
+        Perfumes de la marca, ordenados por nombre con la colación del español. El parámetro `q`
+        filtra por nombre sin distinguir mayúsculas, pero distingue tildes ("dia" no encuentra
+        "Día"). Los caracteres `%`, `_` y `\` se buscan de forma literal.
+      parameters:
+        - $ref: '#/components/parameters/BrandSlug'
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200':
+          description: Lista de perfumes de la marca (vacía si ninguno coincide)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfumeListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /brands/{brandSlug}/perfumes/{perfumeSlug}:
+    get:
+      tags: [Catalog]
+      operationId: getPerfume
+      summary: Obtiene un perfume de una marca
+      parameters:
+        - $ref: '#/components/parameters/BrandSlug'
+        - $ref: '#/components/parameters/PerfumeSlug'
+      responses:
+        '200':
+          description: El perfume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Perfume'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
+  parameters:
+    BrandSlug:
+      name: brandSlug
+      in: path
+      required: true
+      description: Identificador legible de la marca
+      schema:
+        $ref: '#/components/schemas/Slug'
+    PerfumeSlug:
+      name: perfumeSlug
+      in: path
+      required: true
+      description: Identificador legible del perfume dentro de su marca
+      schema:
+        $ref: '#/components/schemas/Slug'
+    SearchQuery:
+      name: q
+      in: query
+      required: false
+      description: >-
+        Texto a buscar en el nombre del perfume. Máximo 100 caracteres tal como se envían (los
+        espacios del principio y del final cuentan para el máximo, pero se ignoran al buscar; un
+        texto en blanco equivale a no buscar). No admite caracteres de control, salvo el tabulador
+        y los saltos de línea.
+      schema:
+        type: string
+        maxLength: 100
+        pattern: '^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$'
+  responses:
+    ValidationError:
+      description: Algún parámetro no es válido (por ejemplo, un slug mal formado)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: No existe lo que se pide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Error interno del servidor (no se revelan detalles internos)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     HealthResponse:
       type: object
@@ -38,3 +176,140 @@ components:
         status:
           type: string
           enum: [ok]
+    Slug:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      examples: [maison-francis-kurkdjian]
+    Price:
+      type: object
+      description: Precio en céntimos de sol (S/ 250,00 = 25000)
+      required: [amountCents, currency]
+      additionalProperties: false
+      properties:
+        amountCents:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          enum: [PEN]
+    PerfumeNotes:
+      type: object
+      description: Notas olfativas por capas; una lista vacía significa "sin dato"
+      required: [top, heart, base]
+      additionalProperties: false
+      properties:
+        top:
+          type: array
+          description: Notas de salida
+          items:
+            type: string
+        heart:
+          type: array
+          description: Notas de corazón
+          items:
+            type: string
+        base:
+          type: array
+          description: Notas de fondo
+          items:
+            type: string
+    BrandRef:
+      type: object
+      required: [slug, name]
+      additionalProperties: false
+      properties:
+        slug:
+          $ref: '#/components/schemas/Slug'
+        name:
+          type: string
+    Brand:
+      type: object
+      required: [slug, name, description]
+      additionalProperties: false
+      properties:
+        slug:
+          $ref: '#/components/schemas/Slug'
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+    BrandSummary:
+      type: object
+      required: [slug, name, description, perfumeCount]
+      additionalProperties: false
+      properties:
+        slug:
+          $ref: '#/components/schemas/Slug'
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        perfumeCount:
+          type: integer
+          minimum: 0
+    Perfume:
+      type: object
+      required: [slug, name, brand, description, sizeMl, price, imageUrl, notes, occasions]
+      additionalProperties: false
+      properties:
+        slug:
+          $ref: '#/components/schemas/Slug'
+        name:
+          type: string
+        brand:
+          $ref: '#/components/schemas/BrandRef'
+        description:
+          type: [string, 'null']
+        sizeMl:
+          type: [integer, 'null']
+          minimum: 1
+          description: Volumen del frasco en mililitros; null si aún no está definido
+        price:
+          oneOf:
+            - $ref: '#/components/schemas/Price'
+            - type: 'null'
+          description: null si el precio aún no está definido
+        imageUrl:
+          type: [string, 'null']
+        notes:
+          $ref: '#/components/schemas/PerfumeNotes'
+        occasions:
+          type: array
+          description: Ocasiones de uso (texto libre por ahora)
+          items:
+            type: string
+    BrandListResponse:
+      type: object
+      required: [items]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrandSummary'
+    PerfumeListResponse:
+      type: object
+      required: [items]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Perfume'
+    ErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, NOT_FOUND, INTERNAL_ERROR]
+            message:
+              type: string

@@ -10,8 +10,8 @@ Tienda web de perfumería de nicho para público hispanohablante, con precios en
 
 ```text
 apps/web/            React + Vite + TypeScript
-apps/api/            Fastify + TypeScript + Zod (Prisma llega en la Fase 5)
-packages/contracts/  Contratos compartidos; fuente OpenAPI en openapi.yaml
+apps/api/            Fastify + TypeScript + Zod + Prisma
+packages/contracts/  Contratos compartidos; fuente OpenAPI en openapi.yaml y tipos generados
 docker-compose.yml   PostgreSQL para desarrollo local
 ```
 
@@ -28,6 +28,7 @@ Usa siempre `pnpm` (versión fijada en `packageManager`; Node >= 24). Se ejecuta
 | `pnpm db:migrate` / `pnpm db:seed`             | Aplica migraciones de desarrollo (Prisma) / carga los datos semilla (idempotente) |
 | `pnpm db:generate`                             | Regenera el cliente de Prisma (`pnpm install` también lo hace en un clon nuevo)   |
 | `pnpm db:test:prepare` y `pnpm test:db`        | Crea y migra la base `perfumeria_test` / pruebas de integración contra PostgreSQL |
+| `pnpm contracts:generate` / `contracts:check`  | Regenera los tipos desde `openapi.yaml` / comprueba que están al día              |
 | `pnpm format` / `pnpm format:check`            | Aplica / comprueba formato con Prettier                                           |
 | `pnpm dev`                                     | API en `:3000` y web en `:5173` en paralelo                                       |
 | `pnpm test`, `pnpm build`, `pnpm typecheck`    | Ejecutan Vitest, la compilación y `tsc --noEmit` en cada app                      |
@@ -39,7 +40,11 @@ Detalles del entorno:
 - Copia `.env.example` a `.env`. `.env` está ignorado por git y nunca debe contener ni exponer secretos en código de cliente (todo lo `VITE_*` es público; la web lee el `.env` raíz con `envDir`).
 - La API ejecuta TypeScript con Node directamente en desarrollo (sin `tsx`): usa imports con extensión `.ts` y sintaxis "borrable" (`erasableSyntaxOnly`; sin `enum` ni parameter properties). `pnpm build` compila a `dist/` con `tsc`.
 - El puerto de la web es fijo (`strictPort`): la API solo acepta CORS desde `WEB_ORIGIN`.
-- `GET /health` no consulta la base de datos; solo indica que la API responde.
+- `GET /health` no consulta la base de datos; solo indica que la API responde. La API exige `DATABASE_URL` al arrancar y sirve el catálogo en `/brands...` (convenciones: ADR 0007).
+- **Cambiar un endpoint = contrato primero:** edita `packages/contracts/openapi.yaml`, ejecuta `pnpm contracts:generate` (actualiza `packages/contracts/generated/schema.d.ts`, que se versiona) y adapta el código. Los DTO de la API se tipan con `components` de `@tienda/contracts`; `pnpm test` falla si las rutas, las respuestas o los tipos generados no coinciden con el yaml. Los esquemas de respuesta del yaml deben ser `$ref` a `components/schemas`.
+- `packages/contracts` usa `typescript@5.9.3` (propio); `apps/api` y `apps/web` usan la 7.0.2. Es deliberado: `openapi-typescript` no funciona con TypeScript 7 (ADR 0003).
+- En la API, la entrada del cliente se valida en el controlador con `parseRequest` (Zod → `RequestValidationError` → 400); un `ZodError` de otro origen es un fallo interno (500). Los errores de la aplicación (`NotFoundError`, `RequestValidationError`) viven en `src/errors.ts`, sin depender de HTTP. El registro de peticiones no guarda `?q=` (`src/http/request-log.ts`). La opción `onRoute` de `buildApp` es solo para pruebas.
+- El puerto 3000 puede estar ocupado por procesos `node --watch` antiguos: para probar a mano usa `API_PORT=3005 pnpm --filter @tienda/api dev`.
 - `pnpm test` no necesita Docker. Las pruebas `*.db.test.ts` usan la base `perfumeria_test`, nunca la de desarrollo: se niegan a ejecutarse (igual que `pnpm db:test:prepare`) si la base de `TEST_DATABASE_URL` no está en esta máquina, si su nombre no cumple `^[a-z0-9_]+_test$`, si es la misma que la de `DATABASE_URL` o si la URL lleva parámetros fuera de una lista blanca (nunca `?host=` ni `?port=`: el cliente `pg` los usa para sustituir al servidor). Las reglas viven en `apps/api/src/test/safety.ts`.
 - El orden alfabético se hace en el repositorio con `Intl.Collator('es')` (la base ordena por bytes). La búsqueda por nombre distingue tildes: limitación conocida (ADR 0006).
 - Las migraciones de Prisma que no se pueden generar solas (como `native_uuid`) se escriben a mano. `prisma migrate reset` lo bloquea Prisma cuando lo lanza una IA: lo debe ejecutar el usuario.
@@ -63,5 +68,4 @@ Detalles del entorno:
 
 ## Decisiones pendientes
 
-- ADR 0003 (`Aceptado`, se implementa en la Fase 5b): pruebas que validan la API contra `openapi.yaml` (`yaml` + `ajv`) y tipos generados con `openapi-typescript`. Comprobar su compatibilidad con TypeScript 7 antes de adoptarla.
 - Cualquier otra dependencia no listada en la guía (por ejemplo `react-router` en la Fase 6): consultar antes de instalar.
