@@ -1,0 +1,77 @@
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+  color: #1f1b16;
+  background: #faf7f2;
+}
+
+body {
+  margin: 0;
+}
+
+.site-header,
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.health__status {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #1f1b16;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+/* El estado no depende solo del color: cambia el icono, el texto y el borde. */
+.health__status--connected {
+  border-style: solid;
+}
+
+.health__status--error {
+  border-style: dashed;
+}
+
+.health__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: 2px solid #1f1b16;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid #8a6a2f;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .health__status--loading .health__icon {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+}

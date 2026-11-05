@@ -9,8 +9,8 @@ Tienda web de perfumería de nicho para público hispanohablante, con precios en
 ## Estructura (monorepo pnpm workspaces)
 
 ```text
-apps/web/            React + Vite + TypeScript        (se crea en la Fase 4)
-apps/api/            Fastify + TypeScript + Zod + Prisma  (se crea en la Fase 4)
+apps/web/            React + Vite + TypeScript
+apps/api/            Fastify + TypeScript + Zod (Prisma llega en la Fase 5)
 packages/contracts/  Contratos compartidos; fuente OpenAPI en openapi.yaml
 docker-compose.yml   PostgreSQL para desarrollo local
 ```
@@ -21,16 +21,22 @@ No sustituyas estas tecnologías ni cambies la estructura sin una instrucción e
 
 Usa siempre `pnpm` (versión fijada en `packageManager`; Node >= 24). Se ejecutan desde la raíz.
 
-| Comando                                                 | Qué hace                                                                            |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `pnpm install`                                          | Instala dependencias de todo el workspace                                           |
-| `pnpm db:up` / `pnpm db:down`                           | Inicia / detiene PostgreSQL con Docker Compose (requiere `.env` y Docker corriendo) |
-| `pnpm format` / `pnpm format:check`                     | Aplica / comprueba formato con Prettier                                             |
-| `pnpm dev`, `pnpm test`, `pnpm build`, `pnpm typecheck` | Delegan en las apps con `pnpm -r --if-present`                                      |
+| Comando                                        | Qué hace                                                                            |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `pnpm install`                                 | Instala dependencias de todo el workspace                                           |
+| `pnpm db:up` / `pnpm db:down`                  | Inicia / detiene PostgreSQL con Docker Compose (requiere `.env` y Docker corriendo) |
+| `pnpm format` / `pnpm format:check`            | Aplica / comprueba formato con Prettier                                             |
+| `pnpm dev`                                     | API en `:3000` y web en `:5173` en paralelo                                         |
+| `pnpm test`, `pnpm build`, `pnpm typecheck`    | Ejecutan Vitest, la compilación y `tsc --noEmit` en cada app                        |
+| `pnpm --filter @tienda/api test`               | Pruebas de una sola app (cambia el filtro por `@tienda/web`)                        |
+| `pnpm --filter @tienda/api test -t "<nombre>"` | Una sola prueba por nombre (sin `--`: con `--` ejecuta todas)                       |
 
-**Aviso:** hasta que existan las apps (Fase 4), `dev`, `test`, `build` y `typecheck` terminan con éxito **sin ejecutar nada**. Un resultado verde antes de la Fase 4 no significa que algo haya pasado.
+Detalles del entorno:
 
-Entorno: copia `.env.example` a `.env`. `.env` está ignorado por git y nunca debe contener ni exponer secretos en código de cliente (todo lo `VITE_*` es público).
+- Copia `.env.example` a `.env`. `.env` está ignorado por git y nunca debe contener ni exponer secretos en código de cliente (todo lo `VITE_*` es público; la web lee el `.env` raíz con `envDir`).
+- La API ejecuta TypeScript con Node directamente en desarrollo (sin `tsx`): usa imports con extensión `.ts` y sintaxis "borrable" (`erasableSyntaxOnly`; sin `enum` ni parameter properties). `pnpm build` compila a `dist/` con `tsc`.
+- El puerto de la web es fijo (`strictPort`): la API solo acepta CORS desde `WEB_ORIGIN`.
+- `GET /health` no consulta la base de datos; solo indica que la API responde.
 
 ## Flujo de trabajo
 
@@ -50,4 +56,4 @@ Entorno: copia `.env.example` a `.env`. `.env` está ignorado por git y nunca de
 ## Decisiones pendientes
 
 - ADR 0003 (`Propuesto`): test que valida respuestas contra el yaml y `openapi-typescript`. No añadas esas dependencias sin aprobación.
-- Dependencias de prueba de la web (`jsdom`, `@testing-library/react`) y otras no listadas en la guía: consultar antes de instalar.
+- Cualquier otra dependencia no listada en la guía (por ejemplo `react-router` en la Fase 6): consultar antes de instalar.
